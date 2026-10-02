@@ -6,7 +6,7 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
 import Reveal from '@/components/ui/Reveal';
-import { useModals } from '@/components/ui/ModalProvider';
+import CtaLink from '@/components/ui/CtaLink';
 import { MOTION_OK } from '@/lib/motion';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -55,7 +55,6 @@ const TILES = [
 ] as const;
 
 export default function VenueCategories() {
-  const { openCampaign } = useModals();
   const sectionRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
 
@@ -240,13 +239,9 @@ export default function VenueCategories() {
             Every location is vetted for sightlines, dwell time and footfall before it joins the
             network.
           </p>
-          <button
-            type="button"
-            onClick={openCampaign}
-            className="btn-primary shrink-0 self-start sm:self-auto"
-          >
+          <CtaLink href="/campaigns/new" className="shrink-0 self-start sm:self-auto">
             Start a campaign
-          </button>
+          </CtaLink>
         </div>
       </Reveal>
     </>

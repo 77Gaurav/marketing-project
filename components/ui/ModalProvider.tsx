@@ -1,11 +1,9 @@
 'use client';
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import CampaignModal from '@/components/CampaignModal';
 import DemoModal from '@/components/DemoModal';
 
 interface ModalContextValue {
-  openCampaign: () => void;
   openDemo: () => void;
 }
 
@@ -16,20 +14,21 @@ const ModalContext = createContext<ModalContextValue | null>(null);
  *
  * Sections are passed as children, so they can stay Server Components; only this provider and the
  * dialogs themselves ship client JS.
+ *
+ * There was once an `openCampaign` here, backed by a three-step modal. Campaign creation is a page at
+ * /campaigns/new now, so those CTAs are anchors (see components/ui/CtaLink.tsx) and no campaign
+ * dialog is mounted at all.
  */
 export default function ModalProvider({ children }: { children: ReactNode }) {
-  const [campaignOpen, setCampaignOpen] = useState(false);
   const [demoOpen, setDemoOpen] = useState(false);
 
-  const openCampaign = useCallback(() => setCampaignOpen(true), []);
   const openDemo = useCallback(() => setDemoOpen(true), []);
 
-  const value = useMemo(() => ({ openCampaign, openDemo }), [openCampaign, openDemo]);
+  const value = useMemo(() => ({ openDemo }), [openDemo]);
 
   return (
     <ModalContext.Provider value={value}>
       {children}
-      <CampaignModal isOpen={campaignOpen} onClose={() => setCampaignOpen(false)} />
       <DemoModal isOpen={demoOpen} onClose={() => setDemoOpen(false)} />
     </ModalContext.Provider>
   );

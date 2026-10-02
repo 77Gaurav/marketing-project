@@ -6,7 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose stop postgres",
+    "db:migrate": "node --env-file-if-exists=.env db/migrate.mjs",
+    "db:seed": "node --env-file-if-exists=.env db/seed.mjs",
+    "db:check": "node --experimental-strip-types --import ./db/register-alias.mjs db/check-schema.ts"
   },
   "dependencies": {
     "@gsap/react": "^2.1.1",
@@ -14,13 +20,16 @@
     "gsap": "^3.12.5",
     "lucide-react": "^0.453.0",
     "next": "^14.2.15",
+    "pg": "^8.23.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwind-merge": "^2.5.4",
-    "uipro-cli": "^2.2.3"
+    "uipro-cli": "^2.2.3",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",
+    "@types/pg": "^8.23.1",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.20",

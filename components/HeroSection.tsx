@@ -6,11 +6,12 @@ import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { Play } from 'lucide-react';
 import Cta from '@/components/ui/Cta';
+import CtaLink from '@/components/ui/CtaLink';
 import { useModals } from '@/components/ui/ModalProvider';
 import { DURATION, EASE, MOTION_OK } from '@/lib/motion';
 
 export default function HeroSection() {
-  const { openCampaign, openDemo } = useModals();
+  const { openDemo } = useModals();
   const rootRef = useRef<HTMLElement>(null);
   const plateRef = useRef<HTMLDivElement>(null);
 
@@ -86,9 +87,9 @@ export default function HeroSection() {
           </p>
 
           <div data-enter className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Cta onClick={openCampaign} withArrow>
+            <CtaLink href="/campaigns/new" withArrow>
               Start a campaign
-            </Cta>
+            </CtaLink>
             <Cta onClick={openDemo} variant="secondary">
               <span className="flex items-center gap-2.5">
                 <span className="flex h-6 w-6 items-center justify-center rounded-pill bg-ink/8">

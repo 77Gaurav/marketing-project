@@ -1,9 +1,8 @@
 'use client';
 
 import { Check } from 'lucide-react';
-import Cta from '@/components/ui/Cta';
+import CtaLink from '@/components/ui/CtaLink';
 import Reveal from '@/components/ui/Reveal';
-import { useModals } from '@/components/ui/ModalProvider';
 
 const PLANS = [
   {
@@ -53,8 +52,6 @@ const PLANS = [
 ];
 
 export default function PricingSection() {
-  const { openCampaign } = useModals();
-
   return (
     <section
       id="pricing"
@@ -122,13 +119,13 @@ export default function PricingSection() {
               </ul>
 
               <div className="mt-8 pt-2">
-                <Cta
-                  onClick={openCampaign}
+                <CtaLink
+                  href="/campaigns/new"
                   variant={plan.highlighted ? 'primary' : 'secondary'}
                   className="w-full"
                 >
                   {plan.cta}
-                </Cta>
+                </CtaLink>
               </div>
             </article>
           ))}

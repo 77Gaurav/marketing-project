@@ -17,7 +17,7 @@ const COLUMNS = [
       { label: 'Café displays', href: '#venues' },
       { label: 'Gyms & fitness', href: '#venues' },
       { label: 'Apparel & footwear', href: '#venues' },
-      { label: 'Start a campaign', href: '#pricing' },
+      { label: 'Start a campaign', href: '/campaigns/new' },
     ],
   },
   {

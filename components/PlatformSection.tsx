@@ -5,8 +5,7 @@ import Image from 'next/image';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { BarChart3, CalendarClock, Film, Layers, ShieldCheck, Sliders } from 'lucide-react';
-import Cta from '@/components/ui/Cta';
-import { useModals } from '@/components/ui/ModalProvider';
+import CtaLink from '@/components/ui/CtaLink';
 import { MOTION_OK } from '@/lib/motion';
 
 /**
@@ -50,7 +49,6 @@ const BEATS = [
 ] as const;
 
 export default function PlatformSection() {
-  const { openCampaign } = useModals();
   const rootRef = useRef<HTMLElement>(null);
   const listRef = useRef<HTMLOListElement>(null);
 
@@ -129,9 +127,9 @@ export default function PlatformSection() {
               </figure>
 
               <div className="mt-10">
-                <Cta onClick={openCampaign} withArrow variant="secondary">
+                <CtaLink href="/campaigns/new" withArrow variant="secondary">
                   Start a campaign
-                </Cta>
+                </CtaLink>
               </div>
             </div>
           </div>

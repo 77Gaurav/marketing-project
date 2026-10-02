@@ -1,6 +1,7 @@
 node_modules
+.next
 .env
 .opencode
-.next
-tsconfig.tsbuildinfo
 *.tsbuildinfo
+tsconfig.tsbuildinfo
+.data

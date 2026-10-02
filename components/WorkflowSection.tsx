@@ -4,8 +4,7 @@ import { useRef } from 'react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { Check, Plus, ShieldCheck, Sparkles } from 'lucide-react';
-import Cta from '@/components/ui/Cta';
-import { useModals } from '@/components/ui/ModalProvider';
+import CtaLink from '@/components/ui/CtaLink';
 import { DURATION, EASE, MOTION_OK } from '@/lib/motion';
 
 /**
@@ -28,7 +27,6 @@ const TONE = [
 ] as const;
 
 export default function WorkflowSection() {
-  const { openCampaign } = useModals();
   const rootRef = useRef<HTMLElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -169,9 +167,9 @@ export default function WorkflowSection() {
             </ul>
 
             <div className="mt-12">
-              <Cta onClick={openCampaign} withArrow>
+              <CtaLink href="/campaigns/new" withArrow>
                 Start a campaign
-              </Cta>
+              </CtaLink>
             </div>
           </div>
 

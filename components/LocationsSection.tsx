@@ -5,8 +5,7 @@ import Image from 'next/image';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { MapPin, Users } from 'lucide-react';
-import Cta from '@/components/ui/Cta';
-import { useModals } from '@/components/ui/ModalProvider';
+import CtaLink from '@/components/ui/CtaLink';
 import { MOTION_OK } from '@/lib/motion';
 
 /**
@@ -71,7 +70,6 @@ const CATEGORIES = [
 ] as const;
 
 export default function LocationsSection() {
-  const { openCampaign } = useModals();
   const [active, setActive] = useState(0);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -248,9 +246,9 @@ export default function LocationsSection() {
             </div>
 
             <div className="mt-10">
-              <Cta onClick={openCampaign} withArrow variant="secondary">
+              <CtaLink href="/campaigns/new" withArrow variant="secondary">
                 Explore locations
-              </Cta>
+              </CtaLink>
             </div>
           </div>
 

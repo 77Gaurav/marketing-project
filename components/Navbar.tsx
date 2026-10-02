@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { Menu, Radio, X } from 'lucide-react';
 import Cta from '@/components/ui/Cta';
+import CtaLink from '@/components/ui/CtaLink';
 import { useModals } from '@/components/ui/ModalProvider';
 import { DURATION, EASE, MOTION_OK, REDUCED_MOTION } from '@/lib/motion';
 
@@ -30,7 +31,7 @@ const NAV = [
 ];
 
 export default function Navbar() {
-  const { openCampaign, openDemo } = useModals();
+  const { openDemo } = useModals();
   const [scrolled, setScrolled] = useState(false);
   const [active, setActive] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -190,9 +191,12 @@ export default function Navbar() {
           >
             Watch demo
           </button>
-          <Cta onClick={openCampaign} className="px-5 text-[length:var(--type-small)]">
+          <CtaLink
+            href="/campaigns/new"
+            className="px-5 text-[length:var(--type-small)]"
+          >
             Start a campaign
-          </Cta>
+          </CtaLink>
         </div>
 
         <button
@@ -250,14 +254,12 @@ export default function Navbar() {
               >
                 Watch demo
               </Cta>
-              <Cta
-                onClick={() => {
-                  setMenuOpen(false);
-                  openCampaign();
-                }}
+              <CtaLink
+                href="/campaigns/new"
+                onClick={() => setMenuOpen(false)}
               >
                 Start a campaign
-              </Cta>
+              </CtaLink>
             </div>
           </div>
         </nav>

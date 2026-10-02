@@ -1,0 +1,39 @@
+# PostgreSQL for local development.
+#
+# Storage here is a Docker named volume, not a file inside the repo. In production the cluster runs
+# on an EBS-backed host path instead — see docker-compose.prod.yml and deploy/postgres.md. Both files
+# keep the cluster's own directory at PGDATA, which is the single variable that has to point at
+# durable storage.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: string-theory-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-string_theory}
+      POSTGRES_USER: ${POSTGRES_USER:-string_theory}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-string_theory}
+      # PGDATA is a subdirectory rather than the mount root: if the mount ever has an unexpected
+      # sibling file in it (a lost+found from an unmounted disk, a stray backup), Postgres only
+      # refuses to start when that file is directly inside PGDATA.
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      # Named volume rather than a ./bind mount so Docker owns the uid: Postgres runs as uid 999 and
+      # a bind mount created by Docker is owned by root, which makes initdb fail on first boot.
+      - string-theory-pgdata:/var/lib/postgresql/data
+    ports:
+      # Bound to loopback only. A dev database has no business being reachable from the network.
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    # PGDATA lives inside the named volume; move it nowhere else.
+    shm_size: 256mb
+
+volumes:
+  string-theory-pgdata:
+    name: ${POSTGRES_VOLUME_NAME:-string-theory-pgdata}

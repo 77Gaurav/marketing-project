@@ -1,14 +1,11 @@
 'use client';
 
 import Image from 'next/image';
-import Cta from '@/components/ui/Cta';
+import CtaLink from '@/components/ui/CtaLink';
 import Reveal from '@/components/ui/Reveal';
 import { Eyebrow } from '@/components/ui/Section';
-import { useModals } from '@/components/ui/ModalProvider';
 
 export default function FooterBanner() {
-  const { openCampaign } = useModals();
-
   return (
     <section id="contact" className="scroll-mt-28 px-5 py-16 sm:px-8 lg:px-10 lg:py-24">
       <div className="mx-auto w-full max-w-shell">
@@ -38,13 +35,13 @@ export default function FooterBanner() {
               </p>
 
               <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
-                <Cta
-                  onClick={openCampaign}
+                <CtaLink
+                  href="/campaigns/new"
                   withArrow
                   className="!bg-paper-raised !text-ink hover:!bg-paper-raised/90 hover:!shadow-none"
                 >
                   Start a campaign
-                </Cta>
+                </CtaLink>
                 <a
                   href="mailto:sales@stringtheory.example"
                   className="inline-flex min-h-[48px] items-center justify-center rounded-pill border border-white/30 px-7 text-base font-medium text-white transition-colors duration-fast ease-out hover:border-white/60 hover:bg-white/10"
