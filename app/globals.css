@@ -1,0 +1,313 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Ink — text hierarchy */
+    --color-ink: 23 23 23;
+    --color-ink-soft: 64 64 64;
+    --color-ink-muted: 94 94 94;
+
+    /* Paper — surfaces */
+    --color-paper: 250 250 249;
+    --color-paper-raised: 255 255 255;
+    --color-paper-sunk: 244 244 243;
+
+    /* Line — hairlines */
+    --color-line: 229 229 228;
+    --color-line-strong: 212 212 211;
+
+    /* Accent — the single emphasis colour */
+    --color-accent: 67 56 202;
+    --color-accent-hover: 55 48 163;
+    --color-accent-wash: 238 242 255;
+
+    /* State — semantic only, never decorative */
+    --color-state-ok: 4 120 87;
+    --color-state-run: 67 56 202;
+    --color-state-wait: 180 83 9;
+    --color-state-error: 185 28 28;
+
+    /* Spacing — 4px base, 8px rhythm */
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-6: 1.5rem;
+    --space-8: 2rem;
+    --space-12: 3rem;
+    --space-16: 4rem;
+    --space-24: 6rem;
+    --space-32: 8rem;
+
+    /* Radius */
+    --radius-sm: 0.5rem;
+    --radius-md: 0.75rem;
+    --radius-lg: 1.25rem;
+    --radius-xl: 1.75rem;
+    --radius-pill: 999px;
+
+    /* Elevation — near-neutral, accent tint capped at ~8% */
+    --shadow-sm: 0 1px 2px rgba(23, 23, 23, 0.04);
+    --shadow-md: 0 4px 16px -4px rgba(23, 23, 23, 0.08);
+    --shadow-lg: 0 18px 44px -18px rgba(23, 23, 23, 0.18);
+    --shadow-accent: 0 18px 44px -20px rgba(67, 56, 202, 0.35);
+
+    /* Layered lift — several shadows at different depths read as real elevation.
+       Single-shadow elevation reads as a sticker. Used for the 3D tilt surfaces. */
+    --shadow-lift:
+      0 1px 1px rgba(23, 23, 23, 0.04), 0 4px 6px -2px rgba(23, 23, 23, 0.06),
+      0 12px 16px -6px rgba(23, 23, 23, 0.08), 0 32px 48px -16px rgba(23, 23, 23, 0.14);
+    --shadow-lift-hover:
+      0 2px 4px rgba(23, 23, 23, 0.05), 0 10px 16px -6px rgba(23, 23, 23, 0.09),
+      0 24px 32px -12px rgba(23, 23, 23, 0.12), 0 56px 80px -24px rgba(23, 23, 23, 0.2);
+    /* Wide, soft contact shadow for elements that appear to float over the page. */
+    --shadow-float:
+      0 1px 2px rgba(23, 23, 23, 0.04), 0 8px 16px -8px rgba(23, 23, 23, 0.1),
+      0 28px 56px -20px rgba(23, 23, 23, 0.16), 0 64px 96px -40px rgba(23, 23, 23, 0.22);
+
+    /* Glass — only over photography */
+    --glass-bg: 255 255 255 0.86;
+    --glass-border: 255 255 255 0.7;
+    --glass-blur: 24px;
+
+    /* Motion — shared tokens, never ad-hoc durations */
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+    --dur-fast: 160ms;
+    --dur-base: 280ms;
+    --dur-slow: 600ms;
+    --dur-cinematic: 1000ms;
+
+    /* Type scale — fluid, with a deliberately high floor.
+       Body copy never renders below 1.0625rem (17px) and secondary text never below
+       0.9375rem (15px): below that, older users start losing words, not just detail. */
+    --type-eyebrow: 0.9375rem;
+    --type-small: 0.9375rem;
+    --type-body: clamp(1.0625rem, 1.02rem + 0.2vw, 1.1875rem);
+    --type-lead: clamp(1.1875rem, 1.1rem + 0.4vw, 1.375rem);
+    --type-h3: clamp(1.5rem, 1.35rem + 0.6vw, 1.875rem);
+    --type-h2: clamp(2.125rem, 1.6rem + 2.4vw, 3.625rem);
+    --type-hero: clamp(2.875rem, 1.5rem + 5.6vw, 5.875rem);
+    /* Split-hero headline. From lg up the copy column is capped at 45% of the content box,
+       which works out to ~0.4 of the viewport — so the headline has to track the *column*,
+       not the viewport. The longest line ("Your audience has") is ~8.98em in Poppins 600, so
+       4.3vw is the most that stays on one line without ever reaching the photo panel. */
+    --type-hero-split: clamp(2.875rem, 4.3vw, 4.5rem);
+
+    /* Layout */
+    --header-height: 4.75rem;
+    --measure: 65ch;
+  }
+
+  * {
+    @apply border-line;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    /* Anchors and keyboard focus clear the sticky header (WCAG 2.2 focus-not-obscured) */
+    scroll-padding-top: calc(var(--header-height) + var(--space-6));
+  }
+
+  body {
+    @apply bg-paper text-ink antialiased;
+    /* Body never drops below the floor defined in the type scale. */
+    font-size: var(--type-body);
+    line-height: 1.65;
+    /* Inter + Poppins both expose these; keeps numerals and punctuation even across the mix. */
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss01';
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Visible focus on every interactive element, never removed without replacement */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-paper rounded-[3px];
+  }
+
+  ::selection {
+    @apply bg-accent text-white;
+  }
+
+  /* Balanced headlines — avoids orphan words on the last line */
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+}
+
+@layer components {
+  /* Two families only. Eyebrows were previously monospace — with the mono stack gone they are set in
+     Inter at a heavier weight, and Poppins replaces the old serif display face. */
+
+  /* Fluid type utilities bound to the scale tokens */
+  .type-eyebrow {
+    font-family: theme('fontFamily.sans');
+    font-size: var(--type-eyebrow);
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    line-height: 1.35;
+  }
+
+  .type-display {
+    font-family: theme('fontFamily.display');
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.04;
+  }
+
+  .type-lead {
+    font-family: theme('fontFamily.sans');
+    font-size: var(--type-lead);
+    line-height: 1.55;
+    color: rgb(var(--color-ink-muted));
+    max-width: var(--measure);
+  }
+
+  /* Secondary/supporting text. Never smaller than 15px. */
+  .type-small {
+    font-size: var(--type-small);
+    line-height: 1.5;
+  }
+
+  /* Readable measure for long-form */
+  .measure {
+    max-width: var(--measure);
+  }
+
+  /* Over photography only — glass on flat paper reads as mud, use paper-raised instead. */
+  .glass {
+    background: rgb(var(--glass-bg));
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    border: 1px solid rgb(var(--glass-border));
+  }
+
+  /* Hairline card: border + shadow-sm, lifts on hover. Never a coloured glow. */
+  .card {
+    @apply bg-paper-raised border border-line rounded-lg shadow-sm;
+    transition:
+      box-shadow var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out),
+      transform var(--dur-base) var(--ease-out);
+  }
+
+  .card-hover:hover {
+    @apply border-line-strong shadow-lg;
+    transform: translateY(-3px);
+  }
+
+  /* Primary action. Accent stays reserved for focus + active state. */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 font-sans font-medium;
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out),
+      box-shadow var(--dur-base) var(--ease-out),
+      opacity var(--dur-fast) var(--ease-out);
+  }
+
+  .btn-primary {
+    @apply btn bg-ink text-paper-raised px-7 rounded-pill;
+    min-height: 52px;
+    font-size: var(--type-body);
+  }
+
+  .btn-primary:hover {
+    @apply bg-accent shadow-accent;
+  }
+
+  .btn-secondary {
+    @apply btn px-7 rounded-pill border border-line-strong text-ink bg-transparent;
+    min-height: 52px;
+    font-size: var(--type-body);
+  }
+
+  .btn-secondary:hover {
+    @apply bg-paper-raised border-ink/25;
+  }
+
+  /* Small square icon control — visual is 20px, hit area is 44px */
+  .icon-btn {
+    @apply inline-flex items-center justify-center text-ink-muted rounded-pill;
+    width: 44px;
+    height: 44px;
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out);
+  }
+
+  .icon-btn:hover {
+    @apply bg-paper-sunk text-ink;
+  }
+}
+
+@layer utilities {
+  .hairline-grid {
+    background-image:
+      linear-gradient(to right, rgb(var(--color-line) / 0.6) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(var(--color-line) / 0.6) 1px, transparent 1px);
+    background-size: 72px 72px;
+  }
+
+  /* Fades a section's edges into the page so bands don't read as boxes */
+  .edge-fade {
+    -webkit-mask-image: linear-gradient(to bottom, transparent, black 12%, black 88%, transparent);
+    mask-image: linear-gradient(to bottom, transparent, black 12%, black 88%, transparent);
+  }
+
+  /* Split hero: the paper feathers across the photo's left edge so the two halves read as one
+     surface. Sits over the photo panel's leading 24% (45% → 58% of the viewport). Held fully
+     opaque for the first few percent so the panel's own hard edge is never visible, then eased
+     off — a straight `to-transparent` ramp leaves a faint seam where it meets the image. */
+  .hero-feather {
+    background-image: linear-gradient(
+      90deg,
+      rgb(var(--color-paper)) 0%,
+      rgb(var(--color-paper)) 4%,
+      rgb(var(--color-paper) / 0.88) 18%,
+      rgb(var(--color-paper) / 0.58) 36%,
+      rgb(var(--color-paper) / 0.28) 56%,
+      rgb(var(--color-paper) / 0.09) 78%,
+      rgb(var(--color-paper) / 0) 100%
+    );
+  }
+
+  /* Matching feather along the top of the photo panel, so it emerges from the paper instead of
+     starting on a hard edge directly under the header. */
+  .hero-feather-top {
+    background-image: linear-gradient(
+      to bottom,
+      rgb(var(--color-paper)) 0%,
+      rgb(var(--color-paper) / 0.86) 34%,
+      rgb(var(--color-paper) / 0.38) 66%,
+      rgb(var(--color-paper) / 0) 100%
+    );
+  }
+}
+
+/* Reduced motion: kill loops, scroll smoothing and CSS-driven movement.
+   GSAP reveals are handled in components/ui/Reveal.tsx via gsap.matchMedia(). */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

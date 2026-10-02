@@ -1,0 +1,6 @@
+node_modules
+.env
+.opencode
+.next
+tsconfig.tsbuildinfo
+*.tsbuildinfo
