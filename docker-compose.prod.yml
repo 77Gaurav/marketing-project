@@ -13,6 +13,9 @@
 #   healthcheck     Left in place because `depends_on: condition: service_healthy` is how a restarted
 #                   database is guaranteed to be accepting queries before the app is started.
 #
+# The app service below is built from ./Dockerfile: Next.js standalone, type-checked during the
+# image build, with migrations shipped inside the image and deliberately not run at start.
+#
 # Requires: a formatted ext4 volume mounted at POSTGRES_DATA_DIR, owned by uid 999 (postgres).
 # See deploy/postgres.md for the attach/format/mount steps and the snapshot schedule.
 
@@ -38,6 +41,75 @@ services:
       retries: 12
       start_period: 30s
     shm_size: 1gb
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '5'
+
+  # Next.js frontend. Stateless — it holds no writable state on disk and holds no sessions in
+  # memory (the session is a signed cookie), so replacing the container is a deploy with nothing
+  # to carry across. Nothing here is mounted, which is the point: an image is the unit of release.
+  app:
+    build:
+      # Built on the instance from the checked-out tree, so a deploy is git pull && up --build.
+      # The alternative is building in CI and setting APP_IMAGE to a registry tag, which this
+      # service also supports — the image name is a variable precisely so both paths work.
+      context: .
+      dockerfile: Dockerfile
+    image: ${APP_IMAGE:-string-theory-app:latest}
+    container_name: string-theory-app
+    restart: unless-stopped
+    # Runs tini as PID 1 so SIGTERM reaches server.js, which closes in-flight requests before
+    # exiting. Without it Node runs as PID 1 and the container is SIGKILLed at the grace period
+    # with requests cut off mid-response.
+    init: true
+    environment:
+      # Required, and required to be written out rather than assembled from the POSTGRES_* parts
+      # above: that password is a real credential and any of @ : / ? # in it has to be
+      # percent-encoded to survive a connection string, which is easy to get wrong silently.
+      #
+      # The host is the compose service name, not 127.0.0.1 — loopback inside the container is the
+      # container. Docker's embedded DNS resolves `postgres` on the default network this compose
+      # project creates, which is also why postgres publishes no port.
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required, pointing at the postgres service}
+      # Correct here and only here: both processes are on the same instance, the connection never
+      # leaves the host, and there is no certificate to verify against.
+      DATABASE_SSL: disable
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+      # 32+ characters, different from every other environment. A shared key means a cookie minted
+      # on staging is accepted here. lib/env.ts refuses to boot in production without it.
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required, at least 32 characters}
+      # lib/env.ts refuses to start when NODE_ENV=production and this is a default or under 12
+      # characters, so a deploy cannot silently ship the admin backdoor.
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required, at least 12 characters}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@stringtheory.test}
+      ADMIN_NAME: ${ADMIN_NAME:-Network admin}
+      # Spelled out rather than left to the default. With this on, anyone who can POST /api/campaigns
+      # provisions themselves a BRAND account; lib/env.ts defaults it off, and a production value
+      # that only ever reaches the app through this file should not depend on that default holding.
+      ALLOW_UNAUTHENTICATED_SIGNUP: 'false'
+      # DEV_AUTH_EMAIL is deliberately absent. It is the no-session fallback identity and
+      # lib/env.ts ignores it in production, so passing it would be a value that reads as
+      # configured and does nothing.
+    ports:
+      # Bound to all interfaces, unlike the database, because this is the only thing an ALB or a
+      # security group is meant to reach. What is allowed to connect here is decided by the
+      # security group on port 80/443, not by this file — keep the security group closed to the
+      # world, since nothing in front of this app terminates TLS yet.
+      - '${APP_PORT:-3000}:3000'
+    depends_on:
+      postgres:
+        # Every route in this app reads PostgreSQL, so an app container that starts before the
+        # cluster accepts queries serves 503s. The health route checks the database for exactly
+        # this reason, and both healthchecks are the mechanism this dependency relies on.
+        condition: service_healthy
+    # Next.js closes connections on SIGTERM; the default 10s grace period is tight for a request
+    # that is mid-render behind a slow query.
+    stop_grace_period: 30s
+    # No healthcheck here on purpose: the image already declares one that hits /api/health, and
+    # re-declaring it in compose would be a second copy to keep in sync with the Dockerfile.
     logging:
       driver: json-file
       options:
