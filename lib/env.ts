@@ -48,6 +48,14 @@ export interface ServerEnv {
    */
   adminEmail: string;
   adminName: string;
+  /**
+   * AWS S3 configuration for video uploads.
+   */
+  awsRegion: string;
+  s3OriginalBucket: string;
+  s3EncodedBucket: string;
+  s3AccessKeyId?: string;
+  s3SecretAccessKey?: string;
 }
 
 let cached: ServerEnv | null = null;
@@ -160,6 +168,11 @@ export function getServerEnv(): ServerEnv {
     adminPassword: resolveAdminPassword(),
     adminEmail: read('ADMIN_EMAIL') ?? 'admin@stringtheory.test',
     adminName: read('ADMIN_NAME') ?? 'Network admin',
+    awsRegion: read('AWS_REGION') ?? 'us-east-1',
+    s3OriginalBucket: read('S3_ORIGINAL_BUCKET') ?? read('AWS_S3_BUCKET') ?? '',
+    s3EncodedBucket: read('S3_ENCODED_BUCKET') ?? read('AWS_S3_BUCKET') ?? '',
+    s3AccessKeyId: read('AWS_ACCESS_KEY_ID') ?? read('S3_ACCESS_KEY_ID'),
+    s3SecretAccessKey: read('AWS_SECRET_ACCESS_KEY') ?? read('S3_SECRET_ACCESS_KEY'),
   };
 
   return cached;

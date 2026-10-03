@@ -193,6 +193,30 @@ export async function recordPendingVideo(
   return toVideo(result.rows[0] as Row);
 }
 
+export interface UpdateVideoUploadInput {
+  originalBucket: string;
+  originalKey: string;
+  status: VideoStatus;
+  uploadedAt?: string;
+}
+
+export async function updateVideoUpload(
+  db: Executor,
+  videoId: string,
+  input: UpdateVideoUploadInput,
+): Promise<CampaignVideo> {
+  const uploadedAt = input.uploadedAt ?? new Date().toISOString();
+  const result = await db.query(
+    `UPDATE campaign_videos
+     SET original_bucket = $2, original_key = $3, status = $4::video_status, uploaded_at = $5, updated_at = now()
+     WHERE id = $1
+     RETURNING ${VIDEO_FIELDS.join(', ')}`,
+    [videoId, input.originalBucket, input.originalKey, input.status, uploadedAt],
+  );
+
+  return toVideo(result.rows[0] as Row);
+}
+
 interface DetailPayloadRow extends QueryResultRow {
   payload: {
     campaign: Row;

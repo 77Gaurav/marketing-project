@@ -100,6 +100,7 @@ export default function VideoDropzone({
         }`}
       >
         <input
+          id={buttonId}
           ref={inputRef}
           type="file"
           accept="video/mp4,video/quicktime,video/x-m4v,video/webm,.mp4,.mov,.m4v,.webm"

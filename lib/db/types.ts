@@ -62,6 +62,9 @@ export interface Brand {
   contactPhone: string;
   status: BrandStatus;
   createdAt: string;
+  videoUrl?: string | null;
+  videoKey?: string | null;
+  videoBucket?: string | null;
 }
 
 /**

@@ -22,10 +22,13 @@ interface BrandRow extends QueryResultRow {
   contact_phone: string;
   status: BrandStatus;
   created_at: Date;
+  video_url?: string | null;
+  video_key?: string | null;
+  video_bucket?: string | null;
 }
 
 const COLUMNS =
-  'id, name, slug, website, owner_user_id, contact_name, contact_email, contact_phone, status, created_at';
+  'id, name, slug, website, owner_user_id, contact_name, contact_email, contact_phone, status, created_at, video_url, video_key, video_bucket';
 
 function toBrand(row: BrandRow): Brand {
   return {
@@ -39,6 +42,9 @@ function toBrand(row: BrandRow): Brand {
     contactPhone: row.contact_phone,
     status: row.status,
     createdAt: row.created_at.toISOString(),
+    videoUrl: row.video_url ?? null,
+    videoKey: row.video_key ?? null,
+    videoBucket: row.video_bucket ?? null,
   };
 }
 
@@ -182,6 +188,9 @@ export interface UpdateBrandInput {
   contactName: string;
   contactEmail: string;
   contactPhone: string;
+  videoUrl?: string | null;
+  videoKey?: string | null;
+  videoBucket?: string | null;
 }
 
 /**
@@ -198,10 +207,20 @@ export async function updateBrandDetails(
 ): Promise<Brand> {
   const result = await db.query<BrandRow>(
     `UPDATE brands
-     SET website = $2, contact_name = $3, contact_email = $4, contact_phone = $5
+     SET website = $2, contact_name = $3, contact_email = $4, contact_phone = $5,
+         video_url = COALESCE($6, video_url), video_key = COALESCE($7, video_key), video_bucket = COALESCE($8, video_bucket)
      WHERE id = $1
      RETURNING ${COLUMNS}`,
-    [id, input.website, input.contactName, input.contactEmail.toLowerCase(), input.contactPhone],
+    [
+      id,
+      input.website,
+      input.contactName,
+      input.contactEmail.toLowerCase(),
+      input.contactPhone,
+      input.videoUrl ?? null,
+      input.videoKey ?? null,
+      input.videoBucket ?? null,
+    ],
   );
 
   return toBrand(result.rows[0]);

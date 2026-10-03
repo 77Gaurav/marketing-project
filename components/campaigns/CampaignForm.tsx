@@ -185,7 +185,73 @@ const FIELD_CONTROL_IDS: Record<(typeof FIELD_ORDER)[number], string> = {
         return;
       }
 
-      setCreated(body as CreatedCampaign);
+      const createdResult = body as CreatedCampaign;
+      
+      // If there's a video, upload it to S3 using presigned URL
+      if (video && createdResult.video) {
+        try {
+          const uploadUrlResponse = await fetch('/api/videos/upload-url', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              campaignId: createdResult.campaign.id,
+              fileName: video.name,
+              mimeType: video.type,
+              fileSize: video.size,
+            }),
+          });
+
+          const uploadUrlData = await uploadUrlResponse.json();
+          if (!uploadUrlResponse.ok) {
+            throw new Error(uploadUrlData.error || 'Failed to get upload URL');
+          }
+
+          // Upload directly to S3
+          const file = (document.querySelector('#campaign-video-input') as HTMLInputElement)?.files?.[0];
+          if (!file) {
+            throw new Error('Video file not found');
+          }
+
+          const s3Upload = await fetch(uploadUrlData.uploadUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': video.type },
+            body: file,
+          });
+
+          if (!s3Upload.ok) {
+            throw new Error('Failed to upload video to S3');
+          }
+
+          // Complete the upload
+          await fetch(`/api/videos/${createdResult.video.id}/complete`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              key: uploadUrlData.key,
+              bucket: uploadUrlData.bucket,
+            }),
+          });
+
+          // Update the brand record with video info
+          await fetch(`/api/brands/${createdResult.brand.id}/video`, {
+            method: 'PUT',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              videoUrl: uploadUrlData.objectUrl,
+              videoKey: uploadUrlData.key,
+              bucket: uploadUrlData.bucket,
+            }),
+          });
+        } catch (uploadError) {
+          console.error('Video upload failed:', uploadError);
+          setFormError(uploadError instanceof Error ? uploadError.message : 'Video upload failed. Campaign was created but video upload failed.');
+          setState('idle');
+          requestFocus(FORM_ERROR_ID);
+          return;
+        }
+      }
+
+      setCreated(createdResult);
       setState('success');
     } catch {
       setFormError('We could not reach the server. Check your connection and try again.');
