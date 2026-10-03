@@ -111,6 +111,43 @@ npm run db:migrate
 `initdb`, and a container that accepts connections before it accepts *queries* is the normal case
 during first boot.
 
+### Brand sign-in
+
+Migration `0005` adds the Google identity columns, so `npm run db:migrate` has to run before the new
+routes work. Sign-in itself needs three values in the app's environment, and only the first two are
+credentials:
+
+```bash
+GOOGLE_CLIENT_ID=<from console.cloud.google.com/apis/credentials>
+GOOGLE_CLIENT_SECRET=<same page, "client secret">
+AUTH_BASE_URL=https://<the public origin of this deployment>
+```
+
+`AUTH_BASE_URL` is not optional in practice. Without it the callback builds its `redirect_uri` from
+the request origin, which behind a load balancer or tunnel is the internal address, and Google rejects
+the exchange for a URI that does not match the registered value exactly. The registered redirect URI
+is `AUTH_BASE_URL` + `/api/auth/google/callback`, and it has to be character-for-character the same in
+Google Console and in the environment.
+
+The app boots fine without any of the three: `/signin` then says sign-in is not configured and
+`/campaigns/new` sends visitors there rather than showing a form that would be refused at the last
+step. That is deliberate — a loud misconfiguration at boot would take the marketing site down over a
+feature it does not use.
+
+### Rebuilding after a dependency change
+
+A changed `package.json` inside an existing image layer is not picked up, which surfaces as
+`Cannot find module '@aws-sdk/client-s3'` from a build that otherwise looks correct. Rebuild without
+the cache:
+
+```bash
+docker compose --env-file /etc/string-theory/postgres.env -f docker-compose.prod.yml build --no-cache app
+docker compose --env-file /etc/string-theory/postgres.env -f docker-compose.prod.yml up -d
+```
+
+Verify locally rather than assuming: `npm ci && npx tsc --noEmit` on a clean checkout reproduces the
+build the container should be doing.
+
 ---
 
 ## Backups

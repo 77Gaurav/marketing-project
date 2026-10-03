@@ -49,6 +49,23 @@ export interface User {
   role: UserRole;
   phone: string | null;
   createdAt: string;
+  /**
+   * Google's `sub` claim, or null for an account with no Google identity.
+   *
+   * Present so the dashboard can show "connected to Google" and so support can tell a signup from a
+   * link. It is never the basis of a lookup on its own here, because {@link google} resolves by it
+   * first and then confirms the address.
+   */
+  googleSubject: string | null;
+  /** Avatar for the dashboard. Presentation only — Google may stop serving it at any time. */
+  avatarUrl: string | null;
+  /**
+   * When this address was last proven to belong to this person.
+   *
+   * Non-null for any account with a Google identity, which the `users_google_subject_verified_chk`
+   * constraint enforces in the database rather than trusting this module to remember.
+   */
+  emailVerifiedAt: string | null;
 }
 
 export interface Brand {
@@ -150,4 +167,26 @@ export interface BrandListEntry extends Brand {
 /** A store as the admin console lists it. `ownerEmail` is null for an operator-added venue. */
 export interface StoreListEntry extends Store {
   ownerEmail: string | null;
+}
+
+/**
+ * One row of a signed-in brand's campaign list.
+ *
+ * A projection rather than a `Campaign`, because the dashboard needs the brand name and the creative's
+ * state beside each campaign, and hanging those off `Campaign` would put brand-scoped and
+ * campaign-scoped data in one type. `videoStatus` is null when no creative was ever offered, which is
+ * a different thing from a creative still waiting to be uploaded.
+ */
+export interface CampaignSummary {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  status: CampaignStatus;
+  createdAt: string;
+  brandId: string;
+  brandName: string;
+  brandSlug: string;
+  videoStatus: VideoStatus | null;
+  videoFileName: string | null;
 }

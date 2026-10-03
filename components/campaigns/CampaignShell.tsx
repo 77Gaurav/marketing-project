@@ -11,8 +11,29 @@ import type { ReactNode } from 'react';
  * leaving the marketing site for the campaign flow feels like moving within one product rather than
  * onto a different website.
  */
-export default function CampaignShell({ children }: { children: ReactNode }) {
+
+/** Who is signed in, when the page already knows. Absent on a public page. */
+export interface ShellUser {
+  fullName: string;
+  email: string;
+}
+
+interface CampaignShellProps {
+  children: ReactNode;
+  /**
+   * The signed-in account, supplied by a page that has already resolved the session.
+   *
+   * Passed in rather than looked up here so that a page whose whole point is to be public — a shared
+   * campaign link — costs no session read, and so the header can never disagree with a page that
+   * already made a decision about who is asking. Omit it and the header offers sign-in instead.
+   */
+  user?: ShellUser;
+}
+
+export default function CampaignShell({ children, user }: CampaignShellProps) {
   const year = new Date().getFullYear();
+  // First name only, because this is a header that has to fit beside a wordmark on a phone.
+  const firstName = user?.fullName.trim().split(/\s+/)[0];
 
   return (
     <div className="flex min-h-screen flex-col bg-paper">
@@ -34,13 +55,32 @@ export default function CampaignShell({ children }: { children: ReactNode }) {
             </span>
           </Link>
 
-          <Link
-            href="/"
-            className="inline-flex min-h-tap items-center gap-2 rounded-pill px-4 text-[length:var(--type-small)] font-medium text-ink-muted transition-colors duration-fast ease-out hover:text-ink"
-          >
-            <ArrowLeft className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
-            Back to site
-          </Link>
+          <div className="flex items-center gap-1 sm:gap-3">
+            {user ? (
+              <Link
+                href="/dashboard"
+                className="inline-flex min-h-tap items-center gap-2 rounded-pill px-3 py-2 text-[length:var(--type-small)] font-medium text-ink transition-colors duration-fast ease-out hover:bg-paper-sunk"
+              >
+                <span className="hidden max-w-[10rem] truncate sm:inline">{firstName}</span>
+                <span className="sm:hidden">Dashboard</span>
+              </Link>
+            ) : (
+              <Link
+                href="/signin"
+                className="inline-flex min-h-tap items-center rounded-pill px-3 py-2 text-[length:var(--type-small)] font-medium text-ink-muted transition-colors duration-fast ease-out hover:text-ink"
+              >
+                Sign in
+              </Link>
+            )}
+
+            <Link
+              href="/"
+              className="inline-flex min-h-tap items-center gap-2 rounded-pill px-3 py-2 text-[length:var(--type-small)] font-medium text-ink-muted transition-colors duration-fast ease-out hover:text-ink"
+            >
+              <ArrowLeft className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+              <span className="hidden sm:inline">Back to site</span>
+            </Link>
+          </div>
         </div>
       </header>
 

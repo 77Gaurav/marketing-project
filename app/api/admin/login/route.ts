@@ -6,7 +6,7 @@ import {
   ensureAdminUser,
   verifyAdminCredentials,
 } from '@/lib/auth/admin';
-import { SESSION_COOKIE, createSessionToken } from '@/lib/auth/session';
+import { SESSION_COOKIE, createSessionToken, sessionCookieOptions } from '@/lib/auth/session';
 import { errorResponse, readJsonBody } from '@/lib/api/admin';
 import { getServerEnv } from '@/lib/env';
 import { adminCredentialsSchema, fieldErrorsFrom } from '@/lib/validation/admin';
@@ -23,9 +23,6 @@ import { adminCredentialsSchema, fieldErrorsFrom } from '@/lib/validation/admin'
  */
 
 export const dynamic = 'force-dynamic';
-
-/** Seven days, matching `SESSION_MAX_AGE_SECONDS` in lib/auth/session.ts. */
-const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
 export async function POST(request: Request) {
   const body = await readJsonBody(request);
@@ -68,15 +65,11 @@ export async function POST(request: Request) {
   }
 
   const { sessionSecret } = getServerEnv();
-  cookies().set(SESSION_COOKIE, createSessionToken(admin.id, sessionSecret), {
-    httpOnly: true,
-    // Lax rather than Strict: the console is a destination someone navigates to, and Strict would
-    // drop the cookie on every arrival from another site, which reads as a login that silently fails.
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    maxAge: COOKIE_MAX_AGE_SECONDS,
-  });
+  cookies().set(
+    SESSION_COOKIE,
+    createSessionToken(admin.id, sessionSecret),
+    sessionCookieOptions(),
+  );
 
   return NextResponse.json({
     admin: { id: admin.id, email: admin.email, fullName: admin.fullName, role: admin.role },

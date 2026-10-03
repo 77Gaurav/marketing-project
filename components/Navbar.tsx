@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { Menu, Radio, X } from 'lucide-react';
@@ -184,6 +185,16 @@ export default function Navbar() {
         </nav>
 
         <div className="hidden items-center gap-3 lg:flex">
+          {/* A plain link rather than a session-aware label: the navbar is a client component and
+              asking it who is signed in would mean either a fetch on every page or a second source of
+              truth. "/signin" redirects to /dashboard when a session already exists, so this is
+              correct for both signed-in and anonymous visitors without knowing which one is here. */}
+          <Link
+            href="/signin"
+            className="inline-flex min-h-tap items-center rounded-pill px-4 text-[length:var(--type-small)] font-medium text-ink-muted transition-colors duration-fast ease-out hover:text-ink"
+          >
+            Sign in
+          </Link>
           <button
             type="button"
             onClick={openDemo}
@@ -254,6 +265,9 @@ export default function Navbar() {
               >
                 Watch demo
               </Cta>
+              <CtaLink href="/signin" onClick={() => setMenuOpen(false)}>
+                Sign in
+              </CtaLink>
               <CtaLink
                 href="/campaigns/new"
                 onClick={() => setMenuOpen(false)}

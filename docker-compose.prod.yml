@@ -93,6 +93,17 @@ services:
       # DEV_AUTH_EMAIL is deliberately absent. It is the no-session fallback identity and
       # lib/env.ts ignores it in production, so passing it would be a value that reads as
       # configured and does nothing.
+
+      # Google sign-in. Optional in the sense that the app boots without it: /signin then explains
+      # that sign-in is not configured rather than offering a button that cannot work, and
+      # /campaigns/new sends everyone to that page instead of a form. No default on purpose — an
+      # empty value here must read as "not set up", not as a credential the app will try and fail with.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      # Required with the two above. This is the origin Google redirects back to, so it has to be the
+      # public one: behind a load balancer or tunnel the request origin is the internal address, and
+      # the redirect URI built from it would not match the one registered in Google Console.
+      AUTH_BASE_URL: ${AUTH_BASE_URL:-}
     ports:
       # Bound to all interfaces, unlike the database, because this is the only thing an ALB or a
       # security group is meant to reach. What is allowed to connect here is decided by the

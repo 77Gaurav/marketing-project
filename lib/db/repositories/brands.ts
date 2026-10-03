@@ -225,3 +225,19 @@ export async function updateBrandDetails(
 
   return toBrand(result.rows[0]);
 }
+
+/**
+ * The brands a signed-in account owns, oldest first.
+ *
+ * `findBrandByOwnerAndName` already matches on owner, so this is the list version of the same question
+ * the campaign form asks: which customer records does this person actually have? Oldest first
+ * because the dashboard leads with the brand someone has had longest.
+ */
+export async function listBrandsForUser(db: Executor, ownerUserId: string): Promise<Brand[]> {
+  const result = await db.query<BrandRow>(
+    `SELECT ${COLUMNS} FROM brands WHERE owner_user_id = $1 ORDER BY created_at ASC`,
+    [ownerUserId],
+  );
+
+  return result.rows.map(toBrand);
+}

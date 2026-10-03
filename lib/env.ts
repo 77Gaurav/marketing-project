@@ -56,6 +56,26 @@ export interface ServerEnv {
   s3EncodedBucket: string;
   s3AccessKeyId?: string;
   s3SecretAccessKey?: string;
+  /**
+   * Google OAuth client credentials for brand sign-in.
+   *
+   * Null when either half is missing, which is the only state the rest of the app needs to
+   * distinguish: half a credential pair cannot sign anyone in, so {@link googleAuthConfigured} is
+   * the question callers actually ask. Google calls these a "web application client"; the secret is
+   * server-side only and must never be reachable from a `'use client'` module.
+   */
+  googleClientId: string | null;
+  googleClientSecret: string | null;
+  /**
+   * Absolute origin the OAuth callback is registered against, without a trailing slash.
+   *
+   * Nullable so the callback can fall back to the origin of the incoming request. That fallback is
+   * right in development and behind a proxy that forwards Host, and wrong the moment the app is
+   * reached on an address that is not its public one — Google rejects a `redirect_uri` that does not
+   * match the registered value exactly, so the failure is loud but confusing. Set this explicitly
+   * in production rather than debugging that.
+   */
+  authBaseUrl: string | null;
 }
 
 let cached: ServerEnv | null = null;
@@ -173,9 +193,24 @@ export function getServerEnv(): ServerEnv {
     s3EncodedBucket: read('S3_ENCODED_BUCKET') ?? read('AWS_S3_BUCKET') ?? '',
     s3AccessKeyId: read('AWS_ACCESS_KEY_ID') ?? read('S3_ACCESS_KEY_ID'),
     s3SecretAccessKey: read('AWS_SECRET_ACCESS_KEY') ?? read('S3_SECRET_ACCESS_KEY'),
+    googleClientId: read('GOOGLE_CLIENT_ID') ?? null,
+    googleClientSecret: read('GOOGLE_CLIENT_SECRET') ?? null,
+    authBaseUrl: read('AUTH_BASE_URL')?.replace(/\/+$/, '') ?? null,
   };
 
   return cached;
+}
+
+/**
+ * True when a Google sign-in could actually complete.
+ *
+ * A separate predicate rather than two null checks at each call site, because "is sign-in available"
+ * is the question the sign-in page and the dashboard both need, and answering it differently in two
+ * places is how one of them ends up showing a button that cannot work.
+ */
+export function googleAuthConfigured(): boolean {
+  const { googleClientId, googleClientSecret } = getServerEnv();
+  return googleClientId !== null && googleClientSecret !== null;
 }
 
 /**

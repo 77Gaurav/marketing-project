@@ -7,6 +7,7 @@ import type {
   Campaign,
   CampaignDetail,
   CampaignStatus,
+  CampaignSummary,
   CampaignVideo,
   VideoStatus,
 } from '@/lib/db/types';
@@ -253,4 +254,67 @@ export async function findCampaignDetail(db: Executor, id: string): Promise<Camp
     brand: toBrand(payload.brand),
     video: payload.video ? toVideo(payload.video) : null,
   };
+}
+
+interface CampaignSummaryRow extends QueryResultRow {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  status: CampaignStatus;
+  created_at: Date;
+  brand_id: string;
+  brand_name: string;
+  brand_slug: string;
+  video_status: VideoStatus | null;
+  video_filename: string | null;
+}
+
+/**
+ * Every campaign a signed-in account can see, newest first.
+ *
+ * Scoped by `brands.owner_user_id` rather than by `campaigns.created_by`, because the brand is the
+ * customer record: a colleague who signs in later with the same Google address has to see the
+ * campaigns the first one created, or the dashboard reads as though the brand has no history.
+ * `created_by` is OR'd in so a campaign created for a brand the account does not own — an operator
+ * acting on a brand's behalf — is still visible to whoever pressed the button.
+ *
+ * `campaign_videos` is joined rather than fetched per row: this is the one query behind the whole
+ * dashboard list, and N+1 here would be N round trips on the page a signed-in brand sees most.
+ * The join is on `campaign_id`, which carries a UNIQUE constraint, so it cannot fan out.
+ *
+ * Capped at 200 because this is a list of links, not an export. The cap is a deliberate ceiling on an
+ * unbounded table rather than a paging scheme, so an account past it sees its newest work and the
+ * older campaigns remain reachable through the brands listed beside this query.
+ */
+export async function listCampaignsForUser(
+  db: Executor,
+  userId: string,
+): Promise<CampaignSummary[]> {
+  const result = await db.query<CampaignSummaryRow>(
+    `SELECT c.id, c.slug, c.name, c.description, c.status, c.created_at,
+            b.id AS brand_id, b.name AS brand_name, b.slug AS brand_slug,
+            v.status AS video_status, v.source_filename AS video_filename
+       FROM campaigns c
+       JOIN brands b ON b.id = c.brand_id
+       LEFT JOIN campaign_videos v ON v.campaign_id = c.id
+      WHERE b.owner_user_id = $1 OR c.created_by = $1
+      ORDER BY c.created_at DESC
+      LIMIT 200`,
+    [userId],
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    description: row.description,
+    status: row.status,
+    createdAt: row.created_at.toISOString(),
+    brandId: row.brand_id,
+    brandName: row.brand_name,
+    brandSlug: row.brand_slug,
+    videoStatus: row.video_status,
+    videoFileName: row.video_filename,
+  }));
 }

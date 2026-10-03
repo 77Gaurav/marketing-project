@@ -25,8 +25,41 @@ import type { User } from '@/lib/db/types';
 
 export const SESSION_COOKIE = 'st_session';
 
-/** Sessions older than this are rejected. Sliding this is a one-line change. */
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+/**
+ * Sessions older than this are rejected. Sliding this is a one-line change.
+ *
+ * Exported because every route that writes the cookie needs the same lifetime, and a fourth private
+ * copy of the number is a fourth chance to mint a cookie that expires at a different moment from the
+ * one `readSessionToken` enforces — which reads as "I get signed out at random".
+ */
+export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+
+/**
+ * The attributes every write of `st_session` must use.
+ *
+ * One factory rather than a literal at each call site, because the clear in a logout has to match the
+ * set exactly: a browser matches a cookie on name *and* path *and* the other attributes it was given,
+ * so deleting with a narrower path leaves the original in place and the user stays signed in after
+ * signing out.
+ *
+ * Lax rather than Strict. The console and dashboard are destinations people navigate to, and Strict
+ * withholds the cookie on every arrival from another site, which reads as a login that silently
+ * fails. Lax still blocks cross-site POST, which is where CSRF bites.
+ */
+export function sessionCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: 'lax' as const,
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: SESSION_MAX_AGE_SECONDS,
+  };
+}
+
+/** Remove the session cookie using the same attributes it was set with. */
+export function clearSessionCookie() {
+  cookies().set(SESSION_COOKIE, '', { ...sessionCookieOptions(), maxAge: 0 });
+}
 
 interface SessionPayload {
   /** User id. */
