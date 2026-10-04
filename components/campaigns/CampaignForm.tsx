@@ -207,15 +207,10 @@ const FIELD_CONTROL_IDS: Record<(typeof FIELD_ORDER)[number], string> = {
           }
 
           // Upload directly to S3
-          const file = (document.querySelector('#campaign-video-input') as HTMLInputElement)?.files?.[0];
-          if (!file) {
-            throw new Error('Video file not found');
-          }
-
           const s3Upload = await fetch(uploadUrlData.uploadUrl, {
             method: 'PUT',
             headers: { 'Content-Type': video.type },
-            body: file,
+            body: video.file,
           });
 
           if (!s3Upload.ok) {

@@ -23,6 +23,7 @@ import {
  */
 
 export interface SelectedVideo {
+  file: File;
   name: string;
   type: string;
   size: number;
@@ -70,10 +71,8 @@ export default function VideoDropzone({
       return;
     }
 
-    // Read metadata only. The File itself is dropped on the floor — it is never uploaded, stored or
-    // serialised anywhere.
     setProblem(null);
-    onChange({ name: file.name, type: file.type, size: file.size }, null);
+    onChange({ file, name: file.name, type: file.type, size: file.size }, null);
   };
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
