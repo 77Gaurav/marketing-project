@@ -104,6 +104,10 @@ services:
       # public one: behind a load balancer or tunnel the request origin is the internal address, and
       # the redirect URI built from it would not match the one registered in Google Console.
       AUTH_BASE_URL: ${AUTH_BASE_URL:-}
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
+      S3_ORIGINAL_BUCKET: ${S3_ORIGINAL_BUCKET:?S3_ORIGINAL_BUCKET is required}
+      S3_ENCODED_BUCKET: ${S3_ENCODED_BUCKET:?S3_ENCODED_BUCKET is required}
+    
     ports:
       # Bound to all interfaces, unlike the database, because this is the only thing an ALB or a
       # security group is meant to reach. What is allowed to connect here is decided by the
