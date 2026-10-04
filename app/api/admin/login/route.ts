@@ -48,12 +48,16 @@ export async function POST(request: Request) {
   try {
     admin = await ensureAdminUser();
   } catch (error) {
-    if (error instanceof AdminAccountConflictError) {
+    if (
+      error instanceof AdminAccountConflictError ||
+      (error instanceof Error && error.name === 'AdminAccountConflictError')
+    ) {
       // The configured ADMIN_EMAIL belongs to an account with another role. Refusing is the only safe
       // answer: promoting it would hand console access to whoever registered that address.
+      const conflict = error as AdminAccountConflictError;
       console.error('[admin] configured admin email is not an ADMIN account', {
-        email: error.email,
-        role: error.actualRole,
+        email: conflict.email,
+        role: conflict.actualRole,
       });
       return errorResponse(
         { error: 'The admin console is misconfigured. Ask whoever set it up to check ADMIN_EMAIL.' },

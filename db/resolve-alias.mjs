@@ -38,6 +38,9 @@ async function firstExistingFile(url) {
 }
 
 export async function resolve(specifier, context, nextResolve) {
+  if (specifier === 'next/headers') {
+    return nextResolve('next/headers.js', context);
+  }
   if (!specifier.startsWith('@/')) {
     return nextResolve(specifier, context);
   }
