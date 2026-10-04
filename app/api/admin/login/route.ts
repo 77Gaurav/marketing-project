@@ -65,13 +65,7 @@ export async function POST(request: Request) {
   }
 
   const { sessionSecret } = getServerEnv();
-  cookies().set(
-    SESSION_COOKIE,
-    createSessionToken(admin.id, sessionSecret),
-    sessionCookieOptions(),
-  );
-
-  return NextResponse.json({
+  const response = NextResponse.json({
     admin: { id: admin.id, email: admin.email, fullName: admin.fullName, role: admin.role },
     // Surfaced rather than logged: the console shows a warning while the credential is still the
     // development default, which is the moment anyone is likely to be told about it.
@@ -79,4 +73,12 @@ export async function POST(request: Request) {
       ? 'This console is using the default development password. Set ADMIN_PASSWORD before deploying.'
       : undefined,
   });
+
+  response.cookies.set(
+    SESSION_COOKIE,
+    createSessionToken(admin.id, sessionSecret),
+    sessionCookieOptions(),
+  );
+
+  return response;
 }

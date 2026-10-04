@@ -95,10 +95,29 @@ POSTGRES_DB=string_theory
 POSTGRES_USER=string_theory
 POSTGRES_PASSWORD=<generate with: openssl rand -base64 32>
 POSTGRES_DATA_DIR=/mnt/string-theory/pgdata
+
+# The app reads from this same file — compose passes it through, and several of these are
+# mandatory: SESSION_SECRET and ADMIN_PASSWORD abort the boot if unset, and AUTH_BASE_URL does too
+# once Google sign-in is configured.
+SESSION_SECRET=<generate with: openssl rand -base64 48>
+ADMIN_PASSWORD=<generate with: openssl rand -base64 24>
+ADMIN_USERNAME=admin
+
+AWS_REGION=ap-south-1
+S3_ORIGINAL_BUCKET=string-theory-original-videos
+S3_ENCODED_BUCKET=string-theory-encoded-videos
+
+GOOGLE_CLIENT_ID=<from console.cloud.google.com/apis/credentials>
+GOOGLE_CLIENT_SECRET=<same page, "client secret">
+AUTH_BASE_URL=https://<your-domain-here>
 ENV
 
-docker compose -f docker-compose.prod.yml up -d
+docker compose --env-file /etc/string-theory/postgres.env -f docker-compose.prod.yml up -d
 ```
+
+Note `--env-file` on every `docker compose` command in this document. Without it compose reads a
+`.env` in the working directory, which on a server is either absent or somebody's stray file — the
+stack then comes up with the development defaults rather than the ones installed above.
 
 Start the app only once PostgreSQL reports healthy:
 
@@ -114,20 +133,38 @@ during first boot.
 ### Brand sign-in
 
 Migration `0005` adds the Google identity columns, so `npm run db:migrate` has to run before the new
-routes work. Sign-in itself needs three values in the app's environment, and only the first two are
-credentials:
+routes work. The three sign-in variables are in the environment file above; this section is about the
+one that is easy to get wrong.
+
+`AUTH_BASE_URL` is not optional, and lib/env.ts refuses to start in production without it. Without it
+the callback builds its `redirect_uri` from the request origin, which behind a load balancer or
+container port mapping is the internal address — producing something like
+`https://0.0.0.0:3000/api/auth/google/callback`. Google rejects that before it looks at the client ID,
+and reports it as a validation page that names neither the host nor the variable.
+
+Two rules from Google's own client validation docs decide what can go here:
+
+- "Redirect URIs must use the HTTPS scheme, not plain HTTP. Localhost URIs (including localhost IP
+  address URIs) are exempt from this rule."
+- "Hosts cannot be raw IP addresses. Localhost IP addresses are exempted from this rule."
+
+So the value has to be a **domain name over HTTPS** — not the server's IP address, and not `0.0.0.0`,
+which is the address a container binds to rather than one a browser can route to. Point a domain at
+the instance's security group, terminate TLS in front of the app, and set the result:
 
 ```bash
-GOOGLE_CLIENT_ID=<from console.cloud.google.com/apis/credentials>
-GOOGLE_CLIENT_SECRET=<same page, "client secret">
-AUTH_BASE_URL=https://<the public origin of this deployment>
+AUTH_BASE_URL=https://brand.stringtheory.com
 ```
 
-`AUTH_BASE_URL` is not optional in practice. Without it the callback builds its `redirect_uri` from
-the request origin, which behind a load balancer or tunnel is the internal address, and Google rejects
-the exchange for a URI that does not match the registered value exactly. The registered redirect URI
-is `AUTH_BASE_URL` + `/api/auth/google/callback`, and it has to be character-for-character the same in
-Google Console and in the environment.
+Then register the callback in Google Console → the client → Authorized redirect URIs, character for
+character, including the scheme, the port if it is not 443, and no trailing slash:
+
+```
+https://brand.stringtheory.com/api/auth/google/callback
+```
+
+`http://localhost:3000/api/auth/google/callback` can be registered alongside it for development
+without affecting the production entry.
 
 The app boots fine without any of the three: `/signin` then says sign-in is not configured and
 `/campaigns/new` sends visitors there rather than showing a form that would be refused at the last

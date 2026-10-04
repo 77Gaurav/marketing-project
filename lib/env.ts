@@ -167,6 +167,37 @@ function resolveAdminPassword(): string {
   return password ?? DEFAULT_ADMIN_PASSWORD;
 }
 
+/**
+ * Resolve the OAuth callback origin, refusing to guess one in production.
+ *
+ * The guess — the origin of the incoming request — is right in development and wrong in almost every
+ * deployment. Behind a load balancer, tunnel or container port mapping the request origin is the
+ * internal address, so the callback is built as something like `https://0.0.0.0:3000/…`, and Google
+ * rejects a redirect URI with a raw-IP host before it ever looks at the client ID. The failure lands
+ * in the browser as Google's OAuth policy page, which names neither the host nor the variable, so it
+ * reads as "the app is broken" rather than "one setting is missing".
+ *
+ * Failing at boot instead costs one clear log line at deploy time. This is the same trade as the
+ * admin password guard above: a configuration that cannot work is worth refusing to start over.
+ */
+function resolveAuthBaseUrl(): string | null {
+  const configured = read('AUTH_BASE_URL');
+  const normalized = configured?.replace(/\/+$/, '') || null;
+
+  const googleConfigured =
+    (read('GOOGLE_CLIENT_ID') ?? null) !== null && (read('GOOGLE_CLIENT_SECRET') ?? null) !== null;
+
+  if (process.env.NODE_ENV === 'production' && googleConfigured && !normalized) {
+    throw new Error(
+      'AUTH_BASE_URL is required in production when Google sign-in is configured. Set it to the ' +
+        'public https origin of this app, e.g. https://brand.example.com. Google matches the ' +
+        'redirect URI exactly, and it cannot be guessed from the request behind a proxy.',
+    );
+  }
+
+  return normalized;
+}
+
 export function getServerEnv(): ServerEnv {
   if (cached) return cached;
 
@@ -195,7 +226,7 @@ export function getServerEnv(): ServerEnv {
     s3SecretAccessKey: read('AWS_SECRET_ACCESS_KEY') ?? read('S3_SECRET_ACCESS_KEY'),
     googleClientId: read('GOOGLE_CLIENT_ID') ?? null,
     googleClientSecret: read('GOOGLE_CLIENT_SECRET') ?? null,
-    authBaseUrl: read('AUTH_BASE_URL')?.replace(/\/+$/, '') ?? null,
+    authBaseUrl: resolveAuthBaseUrl(),
   };
 
   return cached;

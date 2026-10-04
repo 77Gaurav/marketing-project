@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { clearSessionCookie } from '@/lib/auth/session';
+import { SESSION_COOKIE, sessionCookieOptions } from '@/lib/auth/session';
 
 /**
  * POST /api/auth/logout — drop the session.
@@ -16,6 +16,7 @@ import { clearSessionCookie } from '@/lib/auth/session';
 export const dynamic = 'force-dynamic';
 
 export async function POST() {
-  clearSessionCookie();
-  return NextResponse.json({ ok: true });
+  const response = NextResponse.json({ ok: true });
+  response.cookies.set(SESSION_COOKIE, '', { ...sessionCookieOptions(), maxAge: 0 });
+  return response;
 }

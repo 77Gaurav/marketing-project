@@ -39,6 +39,7 @@ export const dynamic = 'force-dynamic';
  */
 const FAILURE_MESSAGES: Record<string, string> = {
   not_configured: messageForReason('not_configured'),
+  redirect_uri_invalid: messageForReason('redirect_uri_invalid'),
   state_mismatch: messageForReason('state_mismatch'),
   email_unverified: messageForReason('email_unverified'),
   identity_conflict:

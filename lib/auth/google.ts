@@ -59,7 +59,15 @@ export type GoogleAuthFailure =
    * is made by email address and an unproven address is exactly what someone supplies to claim an
    * account they do not own.
    */
-  | 'email_unverified';
+  | 'email_unverified'
+  /**
+   * The callback address this server built is one Google will refuse outright — a raw IP, a
+   * non-loopback `http` origin, or `0.0.0.0`.
+   *
+   * Caught here because Google's own response is a validation page that reads like the app is broken
+   * and names no cause. Refusing here turns it into a message that names the variable to fix.
+   */
+  | 'redirect_uri_invalid';
 
 /**
  * A sign-in that cannot proceed, carrying the machine-readable reason the callback turns into a
@@ -112,17 +120,93 @@ function base64url(bytes: Buffer): string {
 }
 
 /**
+ * Hosts Google accepts in a redirect URI, per Google's own client validation rules.
+ *
+ * The rules that matter here, quoted from Google's OAuth client guidance:
+ *
+ *   * "Redirect URIs must use the HTTPS scheme, not plain HTTP. Localhost URIs (domain localhost) are exempt from this rule."
+ *   * "Hosts cannot be raw IP addresses (including 127.0.0.1 for Web applications)."
+ *
+ * So a public deployment needs a real hostname and TLS, and `http://localhost:3000` is fine for
+ * development. Anything else — a bare IP, `127.0.0.1`, `0.0.0.0`, plain `http` on a public host — is refused by
+ * Google before it looks at the client ID, which is why these are checked before the redirect.
+ */
+const LOOPBACK_HOSTS = new Set(['localhost']);
+
+/** True for `1.2.3.4` and `::1`, false for a name. Strips the IPv6 brackets a URL host carries. */
+function isIpAddress(host: string): boolean {
+  const bare = host.replace(/^\[|\]$/g, '');
+  if (bare.includes(':')) return true; // An IPv6 literal is the only host form containing a colon.
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(bare);
+}
+
+/**
+ * Explain why Google would refuse this redirect URI, or null if it looks acceptable.
+ *
+ * Returns prose rather than throwing, so the caller decides whether this is fatal — the same check is
+ * worth running in a startup assertion and in the sign-in route, and only the route should send
+ * someone to a page about it.
+ */
+export function describeRedirectUriProblem(uri: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(uri);
+  } catch {
+    return `"${uri}" is not a valid URL.`;
+  }
+
+  const host = url.hostname.toLowerCase();
+  const isLocalhost = host === 'localhost';
+
+  // 0.0.0.0 is the bind address, not a destination: it is not a raw IP Google will host-match, and no
+  // certificate can be issued for it. Naming it explicitly, because "put your public address here"
+  // reads as though an IP address is acceptable, and the next step is otherwise a puzzle.
+  if (host === '0.0.0.0' || host === '::') {
+    return (
+      `The callback address resolved to "${url.origin}", and 0.0.0.0 is the address a server binds ` +
+      'to, not one a browser can reach. Set AUTH_BASE_URL to the address people actually open.'
+    );
+  }
+
+  if (isIpAddress(host)) {
+    return (
+      `The callback address "${url.origin}" uses a raw IP address (${host}), and Google OAuth 2.0 ` +
+      'policies reject raw IP addresses in redirect URIs for web applications. ' +
+      'Use http://localhost:3000 or set AUTH_BASE_URL=http://localhost:3000.'
+    );
+  }
+
+  if (url.protocol !== 'https:' && !isLocalhost) {
+    return (
+      `The callback address "${url.origin}" is not HTTPS, and Google requires HTTPS for anything ` +
+      'other than localhost. Put TLS in front of this app, then set AUTH_BASE_URL to the https address.'
+    );
+  }
+
+  return null;
+}
+
+/**
  * Start an attempt: mint `state` and a PKCE verifier, then build the URL to send the browser to.
  *
  * PKCE is included even though this is a confidential client that authenticates the exchange with a
  * client secret, because the two defend against different things: the secret stops a code being
  * redeemed by someone who does not have it, and PKCE stops a code intercepted in transit being
- * redeemed by anyone who does. Sending `code_challenge_method` without a matching `code_challenge`
+ * redeemed by anyone who does not. Sending `code_challenge_method` without a matching `code_challenge`
  * would be rejected by Google, so the two are always produced together here.
  */
 export function beginAuthorization(input: { redirectUri: string }): AuthorizationAttempt {
   if (!googleAuthConfigured()) {
     throw new GoogleAuthError('not_configured', 'Google sign-in is not configured on this server.');
+  }
+
+  // Checked before the client ID, because this failure is independent of which project is
+  // configured: no redirect URI of this shape would work, so reporting a client-ID problem would send
+  // the reader to the wrong page.
+  const problem = describeRedirectUriProblem(input.redirectUri);
+  if (problem) {
+    console.error(`[auth/google] refusing to start sign-in: ${problem}`);
+    throw new GoogleAuthError('redirect_uri_invalid', problem);
   }
 
   const { googleClientId } = getServerEnv();
@@ -404,7 +488,13 @@ export function resolveAuthBase(requestUrl: string): string {
   if (authBaseUrl) return authBaseUrl;
 
   try {
-    return new URL(requestUrl).origin;
+    const url = new URL(requestUrl);
+    // Google's OAuth 2.0 policy for web applications strictly forbids IP addresses (such as 127.0.0.1).
+    // In development, map loopback IPs to localhost so Google accepts the redirect URI.
+    if (url.hostname === '127.0.0.1' || url.hostname === '[::1]' || url.hostname === '::1') {
+      url.hostname = 'localhost';
+    }
+    return url.origin;
   } catch {
     // A relative request URL is not something Next hands a route handler, so reporting it as a
     // provider misconfiguration would be a confusing way to describe a programming mistake.
@@ -469,6 +559,11 @@ export function messageForReason(reason: GoogleAuthFailure): string {
   switch (reason) {
     case 'not_configured':
       return 'Google sign-in is not configured on this server yet.';
+    case 'redirect_uri_invalid':
+      return (
+        'This server is asking Google to return to an address Google will not accept. An ' +
+        'administrator needs to set AUTH_BASE_URL to the public https address of this site.'
+      );
     case 'state_mismatch':
       return 'That sign-in link expired or did not start here. Please try again.';
     case 'email_unverified':
