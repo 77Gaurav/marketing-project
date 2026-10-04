@@ -62,7 +62,7 @@ export async function GET(request: Request) {
   };
 
   const fail = (reason: GoogleAuthFailure) => {
-    const target = new URL(SIGN_IN_PATH, requestUrl.origin);
+    const target = new URL(SIGN_IN_PATH, resolveAuthBase(requestUrl.origin));
     target.searchParams.set('error', reason);
     return clearAttempt(NextResponse.redirect(target));
   };
@@ -71,7 +71,7 @@ export async function GET(request: Request) {
   // not a fault, and saying so is friendlier than "something went wrong".
   if (oauthError) {
     console.warn(`[auth/google] provider returned an error: ${oauthError}`);
-    const target = new URL(SIGN_IN_PATH, requestUrl.origin);
+    const target = new URL(SIGN_IN_PATH, resolveAuthBase(requestUrl.origin));
     target.searchParams.set(
       'error',
       oauthError === 'access_denied' ? 'access_denied' : 'provider_error',
@@ -114,7 +114,7 @@ export async function GET(request: Request) {
       // Logged without the address: this is a real security event and the address is already known
       // to whoever holds the account, but the log is not the place to enumerate them.
       console.error('[auth/google] two Google accounts are claiming one local address');
-      const target = new URL(SIGN_IN_PATH, requestUrl.origin);
+      const target = new URL(SIGN_IN_PATH, resolveAuthBase(requestUrl.origin));
       target.searchParams.set('error', 'identity_conflict');
       return clearAttempt(NextResponse.redirect(target));
     }
@@ -123,7 +123,7 @@ export async function GET(request: Request) {
   }
 
   const { sessionSecret } = getServerEnv();
-  const target = new URL(safeNextPath(nextCookie), requestUrl.origin);
+  const target = new URL(safeNextPath(nextCookie), resolveAuthBase(requestUrl.origin),);
 
   const response = clearAttempt(NextResponse.redirect(target));
 
