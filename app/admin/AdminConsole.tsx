@@ -2,10 +2,12 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Database, Plus, Radio, Trash2 } from 'lucide-react';
 import { Field, Select, TextInput } from '@/components/ui/Field';
 import { BRAND_STATUSES, STORE_STATUSES, type BrandListEntry, type StoreListEntry } from '@/lib/db/types';
 import { adminBrandSchema, adminStoreSchema, fieldErrorsFrom } from '@/lib/validation/admin';
+import DatabaseExplorer from './DatabaseExplorer';
+import type { TableSummary } from '@/lib/db/repositories/database-explorer';
 
 /**
  * The admin console.
@@ -31,6 +33,7 @@ interface Props {
   admin: AdminIdentity;
   initialBrands: BrandListEntry[];
   initialStores: StoreListEntry[];
+  initialTables?: TableSummary[];
   weakPasswordWarning: boolean;
 }
 
@@ -79,9 +82,16 @@ const STORE_STATUS_TONE: Record<string, string> = {
   CLOSED: 'text-state-error',
 };
 
-export default function AdminConsole({ admin, initialBrands, initialStores, weakPasswordWarning }: Props) {
+export default function AdminConsole({
+  admin,
+  initialBrands,
+  initialStores,
+  initialTables,
+  weakPasswordWarning,
+}: Props) {
   const router = useRouter();
 
+  const [activeTab, setActiveTab] = useState<'network' | 'database'>('network');
   const [brands, setBrands] = useState(initialBrands);
   const [stores, setStores] = useState(initialStores);
   const [panel, setPanel] = useState<OpenPanel>(null);
@@ -270,19 +280,54 @@ export default function AdminConsole({ admin, initialBrands, initialStores, weak
         </p>
       )}
 
-      <dl className="mt-10 grid gap-4 sm:grid-cols-3">
+      <dl className="mt-10 grid gap-4 sm:grid-cols-4">
         <SummaryTile label="Brands" value={NUMBER_FORMAT.format(brands.length)} />
         <SummaryTile label="Stores" value={NUMBER_FORMAT.format(stores.length)} />
         <SummaryTile label="Screens in network" value={NUMBER_FORMAT.format(totalScreens)} />
+        <SummaryTile label="Database tables" value={NUMBER_FORMAT.format(initialTables?.length ?? 0)} />
       </dl>
 
-      {/* Two regions rather than one page-level banner: a failed delete of a brand and a failed add
-          of a store are different problems and should not overwrite each other. */}
-      <p role="status" className="sr-only">
-        {notice}
-      </p>
+      {/* Tabs navigation: Network Overview vs Database Explorer */}
+      <div className="mt-10 flex items-center gap-2 border-b border-line pb-4">
+        <button
+          type="button"
+          onClick={() => setActiveTab('network')}
+          className={`inline-flex min-h-[40px] items-center gap-2 rounded-pill px-5 text-[length:var(--type-small)] font-semibold transition-colors duration-fast ${
+            activeTab === 'network'
+              ? 'bg-ink text-paper-raised'
+              : 'text-ink-muted hover:bg-paper-raised hover:text-ink'
+          }`}
+        >
+          <Radio className="h-4 w-4" />
+          Network Overview
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('database')}
+          className={`inline-flex min-h-[40px] items-center gap-2 rounded-pill px-5 text-[length:var(--type-small)] font-semibold transition-colors duration-fast ${
+            activeTab === 'database'
+              ? 'bg-ink text-paper-raised'
+              : 'text-ink-muted hover:bg-paper-raised hover:text-ink'
+          }`}
+        >
+          <Database className="h-4 w-4" />
+          Database Explorer
+        </button>
+      </div>
 
-      <section className="mt-14">
+      {activeTab === 'database' ? (
+        <div className="mt-8">
+          <DatabaseExplorer initialTables={initialTables} />
+        </div>
+      ) : (
+        <>
+          {/* Two regions rather than one page-level banner: a failed delete of a brand and a failed add
+              of a store are different problems and should not overwrite each other. */}
+          <p role="status" className="sr-only">
+            {notice}
+          </p>
+
+          <section className="mt-14">
         <SectionHeader
           title="Brands"
           count={brands.length}
@@ -493,8 +538,10 @@ export default function AdminConsole({ admin, initialBrands, initialStores, weak
           )}
         </div>
       </section>
-    </div>
-  );
+    </>
+  )}
+</div>
+);
 }
 
 /* ------------------------------------------------------------------ presentational pieces */

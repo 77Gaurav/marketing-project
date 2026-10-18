@@ -29,6 +29,7 @@ const SEED_USERS = [
  * console have no owner, and seeing the difference is the point of the column.
  */
 const SEED_STORES = [
+  { slug: 'ST-001', name: 'String Theory Flagship (ST-001)', location: 'Indiranagar 100ft Road, Bengaluru', screenCount: 8, owner: null, contactName: 'Store Manager', contactPhone: '+91 80 4123 4567' },
   { slug: 'northside-coffee', name: 'Northside Coffee', location: '12 Bridge Street, ground floor', screenCount: 6, owner: 'cafe@stringtheory.test', contactName: 'Northside Coffee', contactPhone: '+44 20 7946 0002' },
   { slug: 'the-pumphouse-bar', name: 'The Pumphouse Bar', location: '4 Mill Lane, by the escalators', screenCount: 11, owner: null, contactName: 'Rowan Ellis', contactPhone: '+44 20 7946 0003' },
   { slug: 'riverside-gym', name: 'Riverside Gym', location: 'Riverside Retail Park, unit 7', screenCount: 24, owner: null, contactName: 'Samir Patel', contactPhone: '+44 20 7946 0004' },

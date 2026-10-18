@@ -1,0 +1,13 @@
+$kind: http-request
+name: ""
+url: localhost:3000/api/devices/activate
+method: POST
+body:
+  type: json
+  content: |-
+    {
+      "deviceId": "rpi-player-indiranagar-01",
+      "activationCode": "ACT-BLR-8921",
+      "storeId": "ST-001"
+    }
+order: 1000

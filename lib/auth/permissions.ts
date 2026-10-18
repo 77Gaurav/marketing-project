@@ -18,6 +18,8 @@ export const PERMISSIONS = {
   'brand:manage': ['BRAND', 'ADMIN'],
   'store:manage': ['STORE', 'ADMIN'],
   'user:manage': ['ADMIN'],
+  'db:manage': ['ADMIN'],
+  'db:delete': ['ADMIN'],
 } as const satisfies Record<string, readonly UserRole[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

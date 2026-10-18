@@ -42,6 +42,10 @@ export const VIDEO_STATUSES = [
 ] as const;
 export type VideoStatus = (typeof VIDEO_STATUSES)[number];
 
+export const DEVICE_STATUSES = ['PENDING', 'ACTIVATED', 'REVOKED'] as const;
+export type DeviceStatus = (typeof DEVICE_STATUSES)[number];
+
+
 export interface User {
   id: string;
   email: string;
@@ -190,3 +194,21 @@ export interface CampaignSummary {
   videoStatus: VideoStatus | null;
   videoFileName: string | null;
 }
+
+/**
+ * A physical display player running on Raspberry Pi hardware.
+ */
+export interface Device {
+  id: string;
+  deviceId: string;
+  activationCode: string | null;
+  deviceCredential?: string | null;
+  status: DeviceStatus;
+  storeId: string | null;
+  accessToken: string | null;
+  lastSeenAt: string | null;
+  activatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+

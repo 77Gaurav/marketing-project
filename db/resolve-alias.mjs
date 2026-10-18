@@ -41,6 +41,17 @@ export async function resolve(specifier, context, nextResolve) {
   if (specifier === 'next/headers') {
     return nextResolve('next/headers.js', context);
   }
+  if (specifier === 'next/server') {
+    return nextResolve('next/server.js', context);
+  }
+  if (specifier.startsWith('./') || specifier.startsWith('../')) {
+    if (context.parentURL) {
+      const target = await firstExistingFile(new URL(specifier, context.parentURL));
+      if (target) return nextResolve(target.href, context);
+    }
+    return nextResolve(specifier, context);
+  }
+
   if (!specifier.startsWith('@/')) {
     return nextResolve(specifier, context);
   }
