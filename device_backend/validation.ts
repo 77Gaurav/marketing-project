@@ -176,110 +176,105 @@ export type AuthValidationSuccess = {
 export type AuthValidationFailure = {
   ok: false;
   error: string;
-  field?: 'deviceId' | 'deviceCredential';
+  field?: string;
   status: 400;
 };
 
 export type AuthValidationResult = AuthValidationSuccess | AuthValidationFailure;
 
 /**
- * Extracts and strictly validates { deviceId, deviceCredential } from request JSON body.
- * Strictly accepts camelCase parameters only. Rejects snake_case, lowercase, and header formats.
+ * Extracts and validates input for POST /api/devices/authenticate.
+ * Supports:
+ *   1. Refresh mode: refreshToken in request body or Bearer / x-refresh-token header.
+ *   2. Legacy credential mode: { deviceId, deviceCredential } in request body.
  */
 export async function extractAndValidateAuthInput(
   request: Request,
 ): Promise<AuthValidationResult> {
-  // 1. Read JSON body
+  // 1. Check for Bearer token in Authorization header
+  const authHeader = request.headers.get('authorization');
+  let bearerToken: string | null = null;
+  if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
+    bearerToken = authHeader.slice(7).trim();
+  }
+
+  // 2. Check for custom header
+  const customRefreshToken =
+    request.headers.get('x-refresh-token')?.trim() ||
+    request.headers.get('refresh-token')?.trim() ||
+    null;
+
+  // 3. Try reading JSON body if present
   let bodyData: Record<string, unknown> = {};
   try {
     const cloned = request.clone();
     const parsed = await cloned.json();
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       bodyData = parsed as Record<string, unknown>;
-    } else {
-      return {
-        ok: false,
-        error: 'Invalid JSON request body. Expected a JSON object.',
-        status: 400,
-      };
     }
   } catch {
-    return {
-      ok: false,
-      error: 'Malformed or missing JSON body. Request must include a valid JSON body with camelCase fields { deviceId, deviceCredential }.',
-      status: 400,
-    };
+    // Body is optional if refreshToken is provided via headers
   }
 
-  // 2. Reject non-camelCase / deprecated keys
-  const disallowedKeys = [
-    'device_id',
-    'deviceid',
-    'device-id',
-    'device_credential',
-    'devicecredential',
-    'device-credential',
-  ];
+  // 4. Resolve candidate fields
+  const rawRefreshToken =
+    (bodyData.refreshToken as string | undefined) ??
+    (bodyData.RefreshToken as string | undefined) ??
+    (bodyData.refresh_token as string | undefined) ??
+    customRefreshToken ??
+    bearerToken;
 
-  const presentDisallowed = disallowedKeys.filter((k) => k in bodyData);
-  if (presentDisallowed.length > 0) {
-    return {
-      ok: false,
-      error: `Invalid parameter format: only camelCase parameters are accepted. Disallowed format(s) found: ${presentDisallowed.map((k) => `'${k}'`).join(', ')}. Please use camelCase parameters: 'deviceId' and 'deviceCredential'.`,
-      status: 400,
-    };
-  }
+  const rawDeviceId =
+    (bodyData.deviceId as string | undefined) ??
+    (bodyData.DeviceId as string | undefined) ??
+    (bodyData.device_id as string | undefined) ??
+    request.headers.get('x-device-id') ??
+    request.headers.get('device-id');
 
-  const snakeOrKebabKeys = Object.keys(bodyData).filter((k) => k.includes('_') || k.includes('-'));
-  if (snakeOrKebabKeys.length > 0) {
-    return {
-      ok: false,
-      error: `Invalid parameter format: only camelCase parameters are accepted. Found: ${snakeOrKebabKeys.map((k) => `'${k}'`).join(', ')}. Please use camelCase: 'deviceId' and 'deviceCredential'.`,
-      status: 400,
-    };
-  }
+  const rawDeviceCredential =
+    (bodyData.deviceCredential as string | undefined) ??
+    (bodyData.device_credential as string | undefined) ??
+    (bodyData.devicecredential as string | undefined);
 
-  // 3. Extract strictly camelCase fields
-  const rawDeviceId = bodyData.deviceId;
-  const rawDeviceCredential = bodyData.deviceCredential;
-
+  const refreshToken = typeof rawRefreshToken === 'string' ? rawRefreshToken.trim() : '';
   const deviceId = typeof rawDeviceId === 'string' ? rawDeviceId.trim() : '';
   const deviceCredential = typeof rawDeviceCredential === 'string' ? rawDeviceCredential.trim() : '';
 
-  const missing: ('deviceId' | 'deviceCredential')[] = [];
-  if (!deviceId) missing.push('deviceId');
-  if (!deviceCredential) missing.push('deviceCredential');
-
-  if (missing.length > 0) {
-    const errorMsg =
-      missing.length === 1
-        ? `Missing required parameter: '${missing[0]}'. Request must include camelCase parameter '${missing[0]}'.`
-        : `Missing required parameters: ${missing.map((m) => `'${m}'`).join(', ')}. Request must include camelCase parameters { deviceId, deviceCredential }.`;
-
+  // Mode 1: Refresh token provided
+  if (refreshToken) {
     return {
-      ok: false,
-      error: errorMsg,
-      field: missing[0],
-      status: 400,
+      ok: true,
+      data: {
+        mode: 'refresh',
+        refreshToken,
+        ...(deviceId ? { deviceId } : {}),
+      },
     };
   }
 
-  const parseResult = deviceAuthSchema.safeParse({
-    deviceId,
-    deviceCredential,
-  });
-
-  if (!parseResult.success) {
-    const firstIssue = parseResult.error.issues[0];
+  // Mode 2: Legacy deviceCredential provided
+  if (deviceCredential) {
+    if (!deviceId) {
+      return {
+        ok: false,
+        error: "Missing required parameter: 'deviceId'. When authenticating with credentials, deviceId is required.",
+        field: 'deviceId',
+        status: 400,
+      };
+    }
     return {
-      ok: false,
-      error: firstIssue ? firstIssue.message : 'Invalid authentication input parameters.',
-      status: 400,
+      ok: true,
+      data: {
+        mode: 'credential',
+        deviceId,
+        deviceCredential,
+      },
     };
   }
 
   return {
-    ok: true,
-    data: parseResult.data,
+    ok: false,
+    error: 'Authentication requires a valid refreshToken or device credentials ({ deviceId, deviceCredential }).',
+    status: 400,
   };
 }

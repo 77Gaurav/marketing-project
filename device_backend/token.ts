@@ -16,6 +16,10 @@ function signHmac(data: string, secret: string): string {
   return createHmac('sha256', secret).update(data).digest('base64url');
 }
 
+export const SHORT_LIVED_TOKEN_TTL_SECONDS = 3 * 24 * 60 * 60; // 3 days
+export const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60; // 1 month (30 days)
+export const ACTIVATION_CODE_TTL_SECONDS = 15 * 60; // 15 minutes
+
 export interface GeneratedTokenResult {
   token: string;
   expiresIn: number;
@@ -32,7 +36,7 @@ export function generateDeviceAccessToken(
   customTtlSeconds?: number,
 ): GeneratedTokenResult {
   const secret = getDeviceTokenSecret();
-  const ttlSeconds = customTtlSeconds ?? getDeviceTokenTtlSeconds();
+  const ttlSeconds = customTtlSeconds ?? SHORT_LIVED_TOKEN_TTL_SECONDS;
   const nowSeconds = Math.floor(Date.now() / 1000);
   const expSeconds = nowSeconds + ttlSeconds;
 
@@ -61,10 +65,49 @@ export function generateDeviceAccessToken(
 }
 
 /**
- * Verify signature and expiration of a device access token.
+ * Mint a cryptographically secure, long-lived Refresh token for a device (1 month).
  */
-export function verifyDeviceAccessToken(
+export function generateDeviceRefreshToken(
+  deviceId: string,
+  storeId: string | null = null,
+  customTtlSeconds?: number,
+): GeneratedTokenResult {
+  const secret = getDeviceTokenSecret();
+  const ttlSeconds = customTtlSeconds ?? REFRESH_TOKEN_TTL_SECONDS;
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const expSeconds = nowSeconds + ttlSeconds;
+
+  const header = base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+
+  const payload: DeviceTokenPayload = {
+    sub: deviceId,
+    deviceId,
+    storeId,
+    tokenType: 'device_refresh',
+    iat: nowSeconds,
+    exp: expSeconds,
+    jti: randomBytes(16).toString('hex'),
+  };
+
+  const encodedPayload = base64UrlEncode(JSON.stringify(payload));
+  const signature = signHmac(`${header}.${encodedPayload}`, secret);
+
+  const token = `${header}.${encodedPayload}.${signature}`;
+
+  return {
+    token,
+    expiresIn: ttlSeconds,
+    expiresAt: new Date(expSeconds * 1000),
+  };
+}
+
+
+/**
+ * Verify signature, payload structure, and expiration of a device token (access or refresh).
+ */
+export function verifyDeviceToken(
   token: string | null | undefined,
+  expectedType?: 'device_access' | 'device_refresh',
   customSecret?: string,
 ): DeviceTokenVerification {
   if (!token || typeof token !== 'string') {
@@ -107,12 +150,36 @@ export function verifyDeviceAccessToken(
     return { valid: false, reason: 'INVALID_CLAIMS' };
   }
 
+  if (expectedType && payload.tokenType && payload.tokenType !== expectedType) {
+    return { valid: false, reason: 'INVALID_CLAIMS' };
+  }
+
   const currentSeconds = Math.floor(Date.now() / 1000);
   if (currentSeconds >= payload.exp) {
     return { valid: false, reason: 'EXPIRED' };
   }
 
   return { valid: true, payload };
+}
+
+/**
+ * Verify signature and expiration of a device access token.
+ */
+export function verifyDeviceAccessToken(
+  token: string | null | undefined,
+  customSecret?: string,
+): DeviceTokenVerification {
+  return verifyDeviceToken(token, 'device_access', customSecret);
+}
+
+/**
+ * Verify signature and expiration of a long-lived device refresh token.
+ */
+export function verifyDeviceRefreshToken(
+  token: string | null | undefined,
+  customSecret?: string,
+): DeviceTokenVerification {
+  return verifyDeviceToken(token, 'device_refresh', customSecret);
 }
 
 /**

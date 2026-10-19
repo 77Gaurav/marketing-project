@@ -74,8 +74,7 @@ export async function handleDeviceAuthentication(request: Request): Promise<Next
         {
           success: false,
           error: validation.error,
-          field: validation.field,
-          required: ['deviceId', 'deviceCredential'],
+          ...(validation.field ? { field: validation.field } : {}),
         },
         { status: validation.status },
       );
@@ -88,7 +87,7 @@ export async function handleDeviceAuthentication(request: Request): Promise<Next
       request.headers.get('x-store-id') ||
       request.headers.get('store-id');
 
-    // 3. Authenticate device and mint 900-second token
+    // 3. Authenticate device and mint token
     const result = await authenticateDeviceService(validation.data, {
       headerStoreId,
     });
@@ -98,12 +97,13 @@ export async function handleDeviceAuthentication(request: Request): Promise<Next
         {
           success: false,
           error: result.error,
+          ...(result.reason ? { reason: result.reason } : {}),
         },
         { status: result.status },
       );
     }
 
-    // 4. Return 200 with token and 900s expiration
+    // 4. Return 200 with new ShortLivedToken and session info
     return NextResponse.json(result.data, { status: 200 });
   } catch (error) {
     console.error('[device_backend] device authentication failed:', error);

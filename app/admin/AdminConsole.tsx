@@ -1,8 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Database, Plus, Radio, Trash2 } from 'lucide-react';
+import { Database, Plus, Radio, Trash2, Tv } from 'lucide-react';
 import { Field, Select, TextInput } from '@/components/ui/Field';
 import { BRAND_STATUSES, STORE_STATUSES, type BrandListEntry, type StoreListEntry } from '@/lib/db/types';
 import { adminBrandSchema, adminStoreSchema, fieldErrorsFrom } from '@/lib/validation/admin';
@@ -313,6 +314,14 @@ export default function AdminConsole({
           <Database className="h-4 w-4" />
           Database Explorer
         </button>
+
+        <Link
+          href="/admin/store"
+          className="ml-auto inline-flex min-h-[46px] items-center gap-2.5 rounded-pill bg-ink px-6 py-2.5 text-base font-semibold text-paper-raised shadow-sm hover:bg-ink/85 transition-all duration-fast"
+        >
+          <Plus className="h-5 w-5" strokeWidth={2.25} />
+          Add New Device
+        </Link>
       </div>
 
       {activeTab === 'database' ? (
@@ -489,11 +498,17 @@ export default function AdminConsole({
                   {stores.map((store) => (
                     <tr key={store.id} className="border-b border-line last:border-0">
                       <Td>
-                        <span className="block font-semibold text-ink">{store.name}</span>
+                        <Link
+                          href={`/admin/store/${store.id}`}
+                          className="block font-semibold text-ink hover:underline hover:text-ink/80 transition-colors"
+                        >
+                          {store.name}
+                        </Link>
                         <span className="block text-[length:var(--type-small)] text-ink-muted">
                           {store.website ?? 'No website'}
                         </span>
                       </Td>
+
                       <Td className="text-ink">{store.location}</Td>
                       <Td className="hidden md:table-cell">
                         <span className="block text-ink">{store.contactName ?? '—'}</span>

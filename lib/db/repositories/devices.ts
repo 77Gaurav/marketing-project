@@ -3,11 +3,32 @@ import type { Device } from '@/lib/db/types';
 import {
   findDeviceByHardwareId,
   findDeviceByAccessToken,
+  createPendingDevice as createPendingDeviceBackend,
+  activateDeviceByCode as activateDeviceByCodeBackend,
+  listDevicesForStore as listDevicesForStoreBackend,
+  listAllDevices as listAllDevicesBackend,
   activateDevice as activateDeviceBackend,
+  deactivateDevice as deactivateDeviceBackend,
+  deleteRunningActivationsForStore as deleteRunningActivationsForStoreBackend,
+  cleanupExpiredPendingDevices as cleanupExpiredPendingDevicesBackend,
   updateDeviceLastSeen,
 } from '@/device_backend';
 
-export { findDeviceByHardwareId, findDeviceByAccessToken, updateDeviceLastSeen };
+export {
+  findDeviceByHardwareId,
+  findDeviceByAccessToken,
+  updateDeviceLastSeen,
+};
+
+export const createPendingDevice = createPendingDeviceBackend;
+export const activateDeviceByCode = activateDeviceByCodeBackend;
+export const deactivateDevice = deactivateDeviceBackend;
+export const deleteRunningActivationsForStore = deleteRunningActivationsForStoreBackend;
+export const cleanupExpiredPendingDevices = cleanupExpiredPendingDevicesBackend;
+
+export const listDevicesForStore = listDevicesForStoreBackend;
+export const listAllDevices = listAllDevicesBackend;
+
 
 export interface ActivateDeviceInput {
   deviceId: string;

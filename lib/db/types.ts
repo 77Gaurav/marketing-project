@@ -42,7 +42,13 @@ export const VIDEO_STATUSES = [
 ] as const;
 export type VideoStatus = (typeof VIDEO_STATUSES)[number];
 
-export const DEVICE_STATUSES = ['PENDING', 'ACTIVATED', 'REVOKED'] as const;
+export const DEVICE_STATUSES = [
+  'PENDING',
+  'ACTIVATED',
+  'REVOKED',
+  'Activation Pending',
+  'Activated',
+] as const;
 export type DeviceStatus = (typeof DEVICE_STATUSES)[number];
 
 
@@ -206,9 +212,12 @@ export interface Device {
   status: DeviceStatus;
   storeId: string | null;
   accessToken: string | null;
+  refreshToken?: string | null;
+  expiresAt?: string | null;
   lastSeenAt: string | null;
   activatedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
 

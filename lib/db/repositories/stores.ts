@@ -133,6 +133,38 @@ export async function findStoreById(db: Executor, id: string): Promise<Store | n
  * the row and set a status of CLOSED, which `store_status` already allows for.
  */
 export async function deleteStore(db: Executor, id: string): Promise<boolean> {
+  // If any activation is running, make sure we delete the activation first, then delete store
+  await db.query(
+    `DELETE FROM devices
+     WHERE store_id = $1 AND (status = 'Activation Pending' OR status = 'PENDING')`,
+    [id],
+  );
+
   const result = await db.query(`DELETE FROM stores WHERE id = $1`, [id]);
   return result.rowCount !== null && result.rowCount > 0;
+}
+
+/**
+ * Update a store's status (e.g. ACTIVE vs PAUSED/CLOSED).
+ * If deactivating (status !== 'ACTIVE'), any running activation is deleted first.
+ */
+export async function updateStoreStatus(
+  db: Executor,
+  id: string,
+  status: StoreStatus,
+): Promise<Store | null> {
+  // If store is deactivated by admin, delete any running activations first
+  if (status !== 'ACTIVE') {
+    await db.query(
+      `DELETE FROM devices
+       WHERE store_id = $1 AND (status = 'Activation Pending' OR status = 'PENDING')`,
+      [id],
+    );
+  }
+
+  const result = await db.query<StoreRow>(
+    `UPDATE stores SET status = $1 WHERE id = $2 RETURNING ${COLUMNS}`,
+    [status, id],
+  );
+  return result.rows[0] ? toStore(result.rows[0]) : null;
 }

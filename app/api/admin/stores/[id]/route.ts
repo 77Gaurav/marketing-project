@@ -55,6 +55,9 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
         );
       }
 
+      const { deleteRunningActivationsForStore } = await import('@/device_backend');
+      await deleteRunningActivationsForStore(db, store.id);
+
       const deleted = await deleteStore(db, store.id);
       if (!deleted) {
         return errorResponse({ error: 'Store not found.' }, 404);
@@ -71,3 +74,42 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     }
   });
 }
+
+export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+  return withAdmin(async () => {
+    try {
+      const { updateStoreStatus } = await import('@/lib/db/repositories/stores');
+      const { deleteRunningActivationsForStore } = await import('@/device_backend');
+      const body = await request.json();
+      const status = body?.status;
+
+      if (!status || !['PENDING_REVIEW', 'ACTIVE', 'PAUSED', 'CLOSED'].includes(status)) {
+        return errorResponse({ error: 'Invalid store status.' }, 400);
+      }
+
+      const db = getPool();
+
+      // If store is being deactivated (status !== 'ACTIVE'), delete any running activation first
+      let activationsDeleted = 0;
+      if (status !== 'ACTIVE') {
+        activationsDeleted = await deleteRunningActivationsForStore(db, params.id);
+      }
+
+      const updated = await updateStoreStatus(db, params.id, status);
+      if (!updated) {
+        return errorResponse({ error: 'Store not found.' }, 404);
+      }
+
+      return NextResponse.json({
+        success: true,
+        store: updated,
+        activationsDeleted,
+      });
+
+    } catch (error) {
+      console.error('[admin] store status update failed', error);
+      return errorResponse({ error: 'Could not update store status.' }, 500);
+    }
+  });
+}
+

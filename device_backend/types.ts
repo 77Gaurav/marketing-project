@@ -14,11 +14,14 @@ export interface DeviceRow extends QueryResultRow {
   status: DeviceStatus;
   store_id: string | null;
   access_token: string | null;
+  refresh_token: string | null;
+  expires_at: Date | null;
   last_seen_at: Date | null;
   activated_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
+
 
 /**
  * Expected input fields for device activation (strict camelCase).
@@ -30,12 +33,22 @@ export interface DeviceActivationInput {
 }
 
 /**
- * Expected input fields for device authentication (strict camelCase).
+ * Expected input fields for device authentication.
+ * Supports:
+ * - Refresh mode: { refreshToken, deviceId? } or Authorization Bearer header
+ * - Legacy credential mode: { deviceId, deviceCredential }
  */
-export interface DeviceAuthInput {
-  deviceId: string;
-  deviceCredential: string;
-}
+export type DeviceAuthInput =
+  | {
+      mode: 'refresh';
+      refreshToken: string;
+      deviceId?: string;
+    }
+  | {
+      mode: 'credential';
+      deviceId: string;
+      deviceCredential: string;
+    };
 
 /**
  * Decoded claims stored inside the short-lived device access token.
@@ -44,7 +57,7 @@ export interface DeviceTokenPayload {
   sub: string;
   deviceId: string;
   storeId: string | null;
-  tokenType: 'device_access';
+  tokenType: 'device_access' | 'device_refresh';
   iat: number;
   exp: number;
   jti: string;
@@ -89,4 +102,27 @@ export interface DeviceAuthResponse {
   accessToken: string;
   tokenType: 'Bearer';
   expiresIn: number;
+  ShortLivedToken?: string;
+  shortLivedToken?: string;
+  expiresAt?: string;
+  deviceId?: string;
+  storeId?: string | null;
+  refreshToken?: string;
+  RefreshToken?: string;
+  success?: boolean;
 }
+
+/**
+ * Return type on successful activation at /admin/store/activate.
+ * Returns: { deviceId, ShortLivedToken (3 days), RefreshToken (1 month) }
+ */
+export interface DeviceActivationSuccessResult {
+  status: 'Activated';
+  deviceId: string;
+  ShortLivedToken: string;
+  shortLivedToken: string;
+  RefreshToken: string;
+  refreshToken: string;
+  storeId: string | null;
+}
+

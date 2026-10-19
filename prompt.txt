@@ -1,0 +1,4 @@
+Lets work on device authentication (/api/devices/authenticate): 
+
+1. ShortLived access token expiry : take refresh token, validate, generate new access token.
+2. If Longlived token expired : return 401
