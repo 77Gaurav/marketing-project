@@ -17,9 +17,10 @@ export const dynamic = 'force-dynamic';
  *
  * Returns:
  *   {
+ *     "deviceID": "<deviceId>",
  *     "status": "Activated",
- *     "deviceId": "<deviceId>",
- *     "storeId": "<storeId>"
+ *     "shortlived": "<shortLivedToken>",
+ *     "longlived": "<longLivedRefreshToken>"
  *   }
  */
 export async function POST(request: Request) {
@@ -82,13 +83,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        deviceId: result.data.deviceId,
-        ShortLivedToken: result.data.ShortLivedToken,
-        RefreshToken: result.data.RefreshToken,
+        deviceID: result.data.deviceID || result.data.deviceId,
         status: 'Activated',
-        shortLivedToken: result.data.shortLivedToken,
-        refreshToken: result.data.refreshToken,
-        storeId: result.data.storeId,
+        shortlived: result.data.shortlived,
+        longlived: result.data.longlived,
       },
       { status: 200 },
     );

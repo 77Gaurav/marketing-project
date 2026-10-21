@@ -252,11 +252,11 @@ export default function StoreDetailConsole({
     }
   }
 
-  // Deactivate / Delete Device or Pending Code
-  async function handleDeactivateDevice(deviceId: string, isPending: boolean) {
+  // Delete Device or Pending Code
+  async function handleDeleteDevice(deviceId: string, isPending: boolean) {
     const confirmMessage = isPending
       ? 'Are you sure you want to cancel and delete this pending activation code?'
-      : `Are you sure you want to deactivate Device #${deviceId}? It will no longer receive campaigns.`;
+      : `Are you sure you want to delete Device #${deviceId}? This will permanently remove it from the database.`;
 
     if (!window.confirm(confirmMessage)) return;
 
@@ -269,7 +269,7 @@ export default function StoreDetailConsole({
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to deactivate device');
+        throw new Error(data.error || 'Failed to delete device');
       }
 
       if (pendingActivation?.deviceId === deviceId) {
@@ -279,14 +279,14 @@ export default function StoreDetailConsole({
       setNotification({
         message: isPending
           ? `Pending activation code for Device #${deviceId} deleted.`
-          : `Device #${deviceId} deactivated successfully.`,
+          : `Device #${deviceId} deleted completely.`,
         type: 'success',
       });
 
       await refreshData();
     } catch (err: any) {
       setNotification({
-        message: err.message || 'Failed to deactivate device.',
+        message: err.message || 'Failed to delete device.',
         type: 'error',
       });
     }
@@ -510,11 +510,11 @@ export default function StoreDetailConsole({
 
                 <button
                   type="button"
-                  onClick={() => handleDeactivateDevice(pendingActivation.deviceId, true)}
+                  onClick={() => handleDeleteDevice(pendingActivation.deviceId, true)}
                   className="inline-flex items-center gap-1.5 text-xs font-semibold text-state-error hover:bg-state-error/10 px-3 py-1.5 rounded-pill border border-state-error/30 transition-colors"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  Deactivate Code
+                  Delete Code
                 </button>
               </div>
             </div>
@@ -592,7 +592,7 @@ export default function StoreDetailConsole({
                   </h4>
                 </div>
                 <span className="text-xs text-state-ok font-semibold">
-                  Returns: &#123; deviceId, ShortLivedToken (3 days), RefreshToken (1 month) &#125;
+                  Returns: &#123; deviceID, status, shortlived, longlived &#125;
                 </span>
               </div>
 
@@ -689,11 +689,11 @@ export default function StoreDetailConsole({
                         <td className="px-6 py-4 text-right">
                           <button
                             type="button"
-                            onClick={() => handleDeactivateDevice(device.deviceId, isPending)}
+                            onClick={() => handleDeleteDevice(device.deviceId, isPending)}
                             className="inline-flex items-center gap-1.5 text-xs font-semibold text-state-error hover:bg-state-error/10 px-3 py-1.5 rounded-pill border border-state-error/30 transition-colors"
                           >
-                            <PowerOff className="h-3 w-3" />
-                            {isPending ? 'Delete Code' : 'Deactivate'}
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {isPending ? 'Delete Code' : 'Delete Device'}
                           </button>
                         </td>
                       </tr>

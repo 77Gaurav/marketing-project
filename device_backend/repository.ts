@@ -257,6 +257,38 @@ export async function updateDeviceAccessToken(
   return result.rows[0] ? toDevice(result.rows[0]) : null;
 }
 
+/**
+ * Update a device's token pair (short-lived access token & rotated refresh token)
+ * with updated refresh expiration and last_seen_at timestamp (Sliding Window Rotation).
+ */
+export async function updateDeviceTokens(
+  db: Executor,
+  {
+    deviceId,
+    accessToken,
+    refreshToken,
+    expiresAt,
+  }: {
+    deviceId: string;
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: Date;
+  },
+): Promise<Device | null> {
+  const result = await db.query<DeviceRow>(
+    `UPDATE devices
+     SET access_token = $1,
+         refresh_token = $2,
+         expires_at = $3,
+         last_seen_at = now(),
+         updated_at = now()
+     WHERE device_id = $4
+     RETURNING ${COLUMNS}`,
+    [accessToken, refreshToken, expiresAt, deviceId],
+  );
+  return result.rows[0] ? toDevice(result.rows[0]) : null;
+}
+
 /** Record a heartbeat / check-in from the device. */
 export async function updateDeviceLastSeen(db: Executor, deviceId: string): Promise<void> {
   await db.query(`UPDATE devices SET last_seen_at = now() WHERE device_id = $1`, [deviceId]);
@@ -411,8 +443,11 @@ export async function activateDeviceByCode(
     return {
       ok: true,
       data: {
-        status: 'Activated',
+        deviceID: current.device_id,
         deviceId: current.device_id,
+        status: 'Activated',
+        shortlived: slToken,
+        longlived: rfToken,
         ShortLivedToken: slToken,
         shortLivedToken: slToken,
         RefreshToken: rfToken,
@@ -488,8 +523,11 @@ export async function activateDeviceByCode(
   return {
     ok: true,
     data: {
-      status: 'Activated',
+      deviceID: updated.device_id,
       deviceId: updated.device_id,
+      status: 'Activated',
+      shortlived: shortLivedTokenResult.token,
+      longlived: refreshTokenResult.token,
       ShortLivedToken: shortLivedTokenResult.token,
       shortLivedToken: shortLivedTokenResult.token,
       RefreshToken: refreshTokenResult.token,
@@ -500,9 +538,9 @@ export async function activateDeviceByCode(
 }
 
 /**
- * Deactivate an active device or delete an unactivated pending code.
+ * Delete a device completely from the database, erasing its row.
  */
-export async function deactivateDevice(
+export async function deleteDevice(
   db: Executor,
   deviceId: string,
 ): Promise<{ ok: boolean; status: string }> {
@@ -522,25 +560,16 @@ export async function deactivateDevice(
 
   const current = findResult.rows[0];
 
-  if (current.status === 'Activation Pending' || current.status === 'PENDING') {
-    // Delete unactivated code immediately
-    await db.query(`DELETE FROM devices WHERE id = $1`, [current.id]);
-    return { ok: true, status: 'Deleted' };
-  }
+  // Completely delete and erase row from database
+  await db.query(`DELETE FROM devices WHERE id = $1`, [current.id]);
 
-  // Deactivate active device (revoke tokens and access)
-  await db.query(
-    `UPDATE devices
-     SET status = 'REVOKED',
-         access_token = NULL,
-         refresh_token = NULL,
-         updated_at = now()
-     WHERE id = $1`,
-    [current.id],
-  );
-
-  return { ok: true, status: 'Revoked' };
+  return { ok: true, status: 'Deleted' };
 }
+
+/**
+ * Backward compatibility alias: deactivateDevice now deletes the device completely from the database.
+ */
+export const deactivateDevice = deleteDevice;
 
 /**
  * Deletes any running (pending) activations for a given store.

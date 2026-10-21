@@ -8,20 +8,26 @@ import {
   listDevicesForStore as listDevicesForStoreBackend,
   listAllDevices as listAllDevicesBackend,
   activateDevice as activateDeviceBackend,
+  deleteDevice as deleteDeviceBackend,
   deactivateDevice as deactivateDeviceBackend,
   deleteRunningActivationsForStore as deleteRunningActivationsForStoreBackend,
   cleanupExpiredPendingDevices as cleanupExpiredPendingDevicesBackend,
   updateDeviceLastSeen,
+  updateDeviceAccessToken,
+  updateDeviceTokens,
 } from '@/device_backend';
 
 export {
   findDeviceByHardwareId,
   findDeviceByAccessToken,
   updateDeviceLastSeen,
+  updateDeviceAccessToken,
+  updateDeviceTokens,
 };
 
 export const createPendingDevice = createPendingDeviceBackend;
 export const activateDeviceByCode = activateDeviceByCodeBackend;
+export const deleteDevice = deleteDeviceBackend;
 export const deactivateDevice = deactivateDeviceBackend;
 export const deleteRunningActivationsForStore = deleteRunningActivationsForStoreBackend;
 export const cleanupExpiredPendingDevices = cleanupExpiredPendingDevicesBackend;

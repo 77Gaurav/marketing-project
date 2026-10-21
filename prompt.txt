@@ -1,4 +1,4 @@
 Lets work on device authentication (/api/devices/authenticate): 
 
-1. ShortLived access token expiry : take refresh token, validate, generate new access token.
-2. If Longlived token expired : return 401
+1. Sliding Window Token Rotation: take refresh token, validate, generate new short-lived access token AND rotated long-lived refresh token (increasing TTL).
+2. If Long-lived refresh token expired: check for device ID in the database; if a valid active device exists, generate a new pair of short-lived and long-lived tokens.

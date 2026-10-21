@@ -103,6 +103,24 @@ export function generateDeviceRefreshToken(
 
 
 /**
+ * Safely decodes claims stored inside a device token payload without checking expiration or signature.
+ */
+export function decodeDeviceTokenPayload(token: string | null | undefined): DeviceTokenPayload | null {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.trim().split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const payload = JSON.parse(base64UrlDecode(parts[1]));
+    if (payload && typeof payload.deviceId === 'string') {
+      return payload as DeviceTokenPayload;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
  * Verify signature, payload structure, and expiration of a device token (access or refresh).
  */
 export function verifyDeviceToken(
@@ -156,7 +174,7 @@ export function verifyDeviceToken(
 
   const currentSeconds = Math.floor(Date.now() / 1000);
   if (currentSeconds >= payload.exp) {
-    return { valid: false, reason: 'EXPIRED' };
+    return { valid: false, reason: 'EXPIRED', payload };
   }
 
   return { valid: true, payload };

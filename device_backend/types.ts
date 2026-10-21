@@ -48,6 +48,10 @@ export type DeviceAuthInput =
       mode: 'credential';
       deviceId: string;
       deviceCredential: string;
+    }
+  | {
+      mode: 'device';
+      deviceId: string;
     };
 
 /**
@@ -68,7 +72,11 @@ export interface DeviceTokenPayload {
  */
 export type DeviceTokenVerification =
   | { valid: true; payload: DeviceTokenPayload }
-  | { valid: false; reason: 'EXPIRED' | 'INVALID_SIGNATURE' | 'MALFORMED' | 'INVALID_CLAIMS' };
+  | {
+      valid: false;
+      reason: 'EXPIRED' | 'INVALID_SIGNATURE' | 'MALFORMED' | 'INVALID_CLAIMS';
+      payload?: DeviceTokenPayload;
+    };
 
 /**
  * JSON response payload returned by POST /api/devices/activate.
@@ -99,30 +107,33 @@ export interface DeviceActivationResponse {
  * JSON response payload returned by POST /api/devices/authenticate.
  */
 export interface DeviceAuthResponse {
+  success: boolean;
+  message: string;
   accessToken: string;
+  refreshToken: string;
   tokenType: 'Bearer';
   expiresIn: number;
-  ShortLivedToken?: string;
-  shortLivedToken?: string;
-  expiresAt?: string;
-  deviceId?: string;
-  storeId?: string | null;
-  refreshToken?: string;
-  RefreshToken?: string;
-  success?: boolean;
+  expiresAt: string;
+  refreshExpiresIn: number;
+  refreshExpiresAt: string;
+  deviceId: string;
+  status: string;
 }
 
 /**
  * Return type on successful activation at /admin/store/activate.
- * Returns: { deviceId, ShortLivedToken (3 days), RefreshToken (1 month) }
+ * Returns: { deviceID, status, shortlived, longlived }
  */
 export interface DeviceActivationSuccessResult {
-  status: 'Activated';
+  deviceID: string;
   deviceId: string;
-  ShortLivedToken: string;
-  shortLivedToken: string;
-  RefreshToken: string;
-  refreshToken: string;
-  storeId: string | null;
+  status: 'Activated';
+  shortlived: string;
+  longlived: string;
+  ShortLivedToken?: string;
+  shortLivedToken?: string;
+  RefreshToken?: string;
+  refreshToken?: string;
+  storeId?: string | null;
 }
 

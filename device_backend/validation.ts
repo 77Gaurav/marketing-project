@@ -272,9 +272,21 @@ export async function extractAndValidateAuthInput(
     };
   }
 
+  // Mode 3: Device ID provided (for expired refresh token re-issuance or device re-sync)
+  if (deviceId) {
+    return {
+      ok: true,
+      data: {
+        mode: 'device',
+        deviceId,
+      },
+    };
+  }
+
   return {
     ok: false,
-    error: 'Authentication requires a valid refreshToken or device credentials ({ deviceId, deviceCredential }).',
+    error:
+      'Authentication requires a valid refreshToken, deviceId, or device credentials ({ deviceId, deviceCredential }).',
     status: 400,
   };
 }

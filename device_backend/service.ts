@@ -2,8 +2,11 @@ import { randomBytes } from 'node:crypto';
 import { getPool, type Executor } from '@/lib/db/pool';
 import {
   generateDeviceAccessToken,
+  generateDeviceRefreshToken,
   verifyDeviceRefreshToken,
+  decodeDeviceTokenPayload,
   SHORT_LIVED_TOKEN_TTL_SECONDS,
+  REFRESH_TOKEN_TTL_SECONDS,
 } from './token';
 import {
   activateDevice,
@@ -12,6 +15,7 @@ import {
   findDeviceByRefreshToken,
   updateDeviceSession,
   updateDeviceAccessToken,
+  updateDeviceTokens,
 } from './repository';
 import type {
   DeviceActivationInput,
@@ -122,28 +126,25 @@ export async function activateDeviceService(
  * Authentication service for automatic device login.
  *
  * Request: POST /api/devices/authenticate
- * Accepts: { deviceId, deviceCredential }
+ * Accepts: { refreshToken, deviceId? } or { deviceId } or { deviceId, deviceCredential }
  * Header: storeId (optional/checked if device has no assigned store)
  *
- * 1. Resolves device by hardware deviceId.
- * 2. Verifies deviceCredential (or activationCode fallback).
- * 3. Verifies device is ACTIVATED (not REVOKED).
- * 4. Resolves storeId:
- *    - Validates header storeId if provided. If invalid, responds with "Invalid Store id".
- *    - Falls back to device.storeId in database.
- *    - If device has no store associated and no header provided, asks for storeId in header.
  * 1. Refresh Mode (Standard):
- *    - Validates signature and 1-month expiry of the long-lived refresh token.
- *    - If expired or invalid: returns HTTP 401.
- *    - Verifies device is activated and bound to an active store.
- *    - Mints a new 3-day short-lived secret access token.
- *    - Updates device access_token and last_seen_at in PostgreSQL.
- *    - Returns { accessToken, ShortLivedToken, tokenType: 'Bearer', expiresIn: 259200, ... }.
+ *    - Validates signature and claims of the long-lived refresh token.
+ *    - Sliding Window token rotation: upon authentication success, generates a brand-new
+ *      3-day access token AND a new 1-month refresh token (extending the TTL).
+ *    - If the refresh token itself is expired: looks up deviceId from token claims, payload,
+ *      or request body, checks the database for a valid active device; if valid, re-issues
+ *      a fresh short-lived and long-lived token pair.
  *
- * 2. Credential Mode (Legacy):
+ * 2. Device ID Mode (Re-sync / Expired token recovery):
+ *    - Accepts { deviceId }.
+ *    - Verifies device is activated and active in the database; generates new token pair.
+ *
+ * 3. Credential Mode (Legacy):
  *    - Accepts { deviceId, deviceCredential }.
  *    - Verifies device credentials and status.
- *    - Mints 3-day access token and updates device session.
+ *    - Generates new short-lived and rotated long-lived refresh tokens.
  */
 export async function authenticateDeviceService(
   input: DeviceAuthInput,
@@ -154,33 +155,56 @@ export async function authenticateDeviceService(
 ): Promise<AuthServiceResult> {
   const db = options?.db ?? getPool();
 
-  // Mode 1: Refresh Token Flow
-  // 1. ShortLived access token expiry : take refresh token, validate, generate new access token.
-  // 2. If Longlived token expired : return 401
+  // Mode 1: Refresh Token Flow (with Sliding Window token rotation & expired token recovery)
   if (input.mode === 'refresh') {
     // 1. Cryptographically verify signature, claims, and expiry of the long-lived refresh token
     const verification = verifyDeviceRefreshToken(input.refreshToken);
-    if (!verification.valid) {
-      if (verification.reason === 'EXPIRED') {
+    const isJwtExpired = !verification.valid && verification.reason === 'EXPIRED';
+
+    // If verification failed due to something OTHER than expiration (e.g. malformed or invalid signature)
+    if (!verification.valid && !isJwtExpired) {
+      const dbDevice = await findDeviceByRefreshToken(db, input.refreshToken);
+      if (!dbDevice && !input.deviceId) {
         return {
           ok: false,
-          error: 'Refresh token has expired (1-month validity). Please re-activate device.',
-          reason: 'EXPIRED',
+          error: 'Invalid or malformed refresh token.',
+          reason: verification.reason,
           status: 401,
         };
       }
+    }
+
+    // 2. Resolve target deviceId
+    let targetDeviceId = input.deviceId;
+    if (!targetDeviceId && verification.payload?.deviceId) {
+      targetDeviceId = verification.payload.deviceId;
+    }
+    if (!targetDeviceId) {
+      const decoded = decodeDeviceTokenPayload(input.refreshToken);
+      if (decoded?.deviceId) {
+        targetDeviceId = decoded.deviceId;
+      }
+    }
+    if (!targetDeviceId) {
+      const dbDevice = await findDeviceByRefreshToken(db, input.refreshToken);
+      if (dbDevice?.deviceId) {
+        targetDeviceId = dbDevice.deviceId;
+      }
+    }
+
+    if (!targetDeviceId) {
       return {
         ok: false,
-        error: 'Invalid or malformed refresh token.',
-        reason: verification.reason,
+        error: 'Unable to identify device from refresh token. Please provide deviceId or re-activate device.',
+        reason: 'EXPIRED',
         status: 401,
       };
     }
 
-    const { deviceId: tokenDeviceId, storeId: tokenStoreId } = verification.payload;
-
-    // 2. If deviceId was supplied, verify it matches the token claims
-    if (input.deviceId && input.deviceId !== tokenDeviceId) {
+    // If both input.deviceId and token claims are present, ensure they match
+    const tokenClaimDeviceId =
+      verification.payload?.deviceId || decodeDeviceTokenPayload(input.refreshToken)?.deviceId;
+    if (input.deviceId && tokenClaimDeviceId && input.deviceId !== tokenClaimDeviceId) {
       return {
         ok: false,
         error: 'Provided deviceId does not match the refresh token.',
@@ -189,16 +213,16 @@ export async function authenticateDeviceService(
     }
 
     // 3. Look up device in PostgreSQL
-    const device = await findDeviceByHardwareId(db, tokenDeviceId);
+    const device = await findDeviceByHardwareId(db, targetDeviceId);
     if (!device) {
       return {
         ok: false,
-        error: 'Device not found.',
-        status: 401,
+        error: 'Device not found in database.',
+        status: 404,
       };
     }
 
-    // 4. Verify device status
+    // 4. Verify device status: must be Activated, not Revoked
     if (device.status === 'REVOKED') {
       return {
         ok: false,
@@ -215,8 +239,12 @@ export async function authenticateDeviceService(
       };
     }
 
-    // 5. Verify refresh token matches stored token (anti-replay / revocation check)
-    if (device.refreshToken && device.refreshToken !== input.refreshToken) {
+    // 5. Check if token was expired (either JWT exp or DB expires_at)
+    const isDbExpired = Boolean(device.expiresAt && new Date(device.expiresAt).getTime() < Date.now());
+    const isExpired = isJwtExpired || isDbExpired;
+
+    // For an unexpired token, enforce anti-replay check
+    if (!isExpired && device.refreshToken && device.refreshToken !== input.refreshToken) {
       return {
         ok: false,
         error: 'Refresh token is no longer valid or has been rotated.',
@@ -224,17 +252,9 @@ export async function authenticateDeviceService(
       };
     }
 
-    // 6. Check database expires_at if set
-    if (device.expiresAt && new Date(device.expiresAt).getTime() < Date.now()) {
-      return {
-        ok: false,
-        error: 'Refresh token has expired (1-month validity). Please re-activate device.',
-        reason: 'EXPIRED',
-        status: 401,
-      };
-    }
-
-    // 7. Verify associated store is active
+    // 6. Verify associated store is active
+    const tokenStoreId =
+      verification.payload?.storeId || decodeDeviceTokenPayload(input.refreshToken)?.storeId;
     const resolvedStoreId = device.storeId || tokenStoreId;
     if (resolvedStoreId) {
       const store = await findStoreByIdOrSlug(db, resolvedStoreId);
@@ -247,36 +267,157 @@ export async function authenticateDeviceService(
       }
     }
 
-    // 8. Generate new short-lived access token: 3 days (259,200 seconds)
-    const { token: newAccessToken, expiresIn, expiresAt } = generateDeviceAccessToken(
+    // 7. Sliding Window Token Rotation / Re-issuance
+    // Generate new short-lived access token: 3 days (259,200 seconds)
+    const {
+      token: newAccessToken,
+      expiresIn: shortLivedExpiresIn,
+      expiresAt: shortLivedExpiresAt,
+    } = generateDeviceAccessToken(
       device.deviceId,
       resolvedStoreId,
       SHORT_LIVED_TOKEN_TTL_SECONDS,
     );
 
-    // 9. Update access_token and last_seen_at in PostgreSQL
-    await updateDeviceAccessToken(db, device.deviceId, newAccessToken);
+    // Generate new long-lived refresh token: 1 month (2,592,000 seconds) - Sliding window extension
+    const {
+      token: newRefreshToken,
+      expiresIn: refreshExpiresIn,
+      expiresAt: refreshExpiresAt,
+    } = generateDeviceRefreshToken(
+      device.deviceId,
+      resolvedStoreId,
+      REFRESH_TOKEN_TTL_SECONDS,
+    );
+
+    // 8. Update PostgreSQL with both new tokens and fresh expiration
+    await updateDeviceTokens(db, {
+      deviceId: device.deviceId,
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+      expiresAt: refreshExpiresAt,
+    });
 
     return {
       ok: true,
       data: {
         success: true,
+        message: isExpired
+          ? 'Refresh token was expired; verified device in database and generated new token pair.'
+          : 'Device authentication and sliding window token rotation successful.',
         accessToken: newAccessToken,
-        ShortLivedToken: newAccessToken,
-        shortLivedToken: newAccessToken,
+        refreshToken: newRefreshToken,
         tokenType: 'Bearer',
-        expiresIn,
-        expiresAt: expiresAt.toISOString(),
+        expiresIn: shortLivedExpiresIn,
+        expiresAt: shortLivedExpiresAt.toISOString(),
+        refreshExpiresIn,
+        refreshExpiresAt: refreshExpiresAt.toISOString(),
         deviceId: device.deviceId,
-        storeId: resolvedStoreId,
-        refreshToken: input.refreshToken,
-        RefreshToken: input.refreshToken,
+        status: device.status,
       },
     };
   }
 
-  // Mode 2: Legacy Credential Flow
-  // 1. Look up device
+  // Mode 2: Device ID Only Flow (when refresh token expired or lost, check DB for device_id)
+  if (input.mode === 'device') {
+    const device = await findDeviceByHardwareId(db, input.deviceId);
+    if (!device) {
+      return {
+        ok: false,
+        error: 'Device not found in database.',
+        status: 404,
+      };
+    }
+
+    if (device.status === 'REVOKED') {
+      return {
+        ok: false,
+        error: 'Device access revoked.',
+        status: 401,
+      };
+    }
+
+    if (device.status !== 'Activated' && device.status !== 'ACTIVATED') {
+      return {
+        ok: false,
+        error: 'Device is not activated.',
+        status: 401,
+      };
+    }
+
+    // Resolve storeId
+    let resolvedStoreId = device.storeId;
+    const headerStoreId = options?.headerStoreId?.trim();
+    if (headerStoreId) {
+      const store = await findStoreByIdOrSlug(db, headerStoreId);
+      if (!store) {
+        return {
+          ok: false,
+          error: 'Invalid Store id',
+          status: 400,
+        };
+      }
+      resolvedStoreId = store.id;
+    }
+
+    if (resolvedStoreId) {
+      const store = await findStoreByIdOrSlug(db, resolvedStoreId);
+      if (store && store.status !== 'ACTIVE') {
+        return {
+          ok: false,
+          error: 'Associated store is not active. Device authentication is only permitted for active stores.',
+          status: 401,
+        };
+      }
+    }
+
+    // Generate new token pair
+    const {
+      token: newAccessToken,
+      expiresIn: shortLivedExpiresIn,
+      expiresAt: shortLivedExpiresAt,
+    } = generateDeviceAccessToken(
+      device.deviceId,
+      resolvedStoreId,
+      SHORT_LIVED_TOKEN_TTL_SECONDS,
+    );
+
+    const {
+      token: newRefreshToken,
+      expiresIn: refreshExpiresIn,
+      expiresAt: refreshExpiresAt,
+    } = generateDeviceRefreshToken(
+      device.deviceId,
+      resolvedStoreId,
+      REFRESH_TOKEN_TTL_SECONDS,
+    );
+
+    await updateDeviceTokens(db, {
+      deviceId: device.deviceId,
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+      expiresAt: refreshExpiresAt,
+    });
+
+    return {
+      ok: true,
+      data: {
+        success: true,
+        message: 'Verified device in database and generated new token pair.',
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+        tokenType: 'Bearer',
+        expiresIn: shortLivedExpiresIn,
+        expiresAt: shortLivedExpiresAt.toISOString(),
+        refreshExpiresIn,
+        refreshExpiresAt: refreshExpiresAt.toISOString(),
+        deviceId: device.deviceId,
+        status: device.status,
+      },
+    };
+  }
+
+  // Mode 3: Legacy Credential Flow
   const device = await findDeviceByHardwareId(db, input.deviceId);
   if (!device) {
     return {
@@ -286,7 +427,6 @@ export async function authenticateDeviceService(
     };
   }
 
-  // 2. Verify status
   if (device.status === 'REVOKED') {
     return {
       ok: false,
@@ -295,7 +435,6 @@ export async function authenticateDeviceService(
     };
   }
 
-  // 3. Verify deviceCredential
   const matchesCredential =
     (device.deviceCredential && device.deviceCredential === input.deviceCredential) ||
     (device.activationCode && device.activationCode === input.deviceCredential);
@@ -308,7 +447,7 @@ export async function authenticateDeviceService(
     };
   }
 
-  // 4. Resolve storeId
+  // Resolve storeId
   let resolvedStoreId: string | null = null;
   const headerStoreId = options?.headerStoreId?.trim();
 
@@ -332,32 +471,59 @@ export async function authenticateDeviceService(
     };
   }
 
-  // 5. Generate short-lived access token: 3 days (SHORT_LIVED_TOKEN_TTL_SECONDS)
-  const { token, expiresIn, expiresAt } = generateDeviceAccessToken(
+  if (resolvedStoreId) {
+    const store = await findStoreByIdOrSlug(db, resolvedStoreId);
+    if (store && store.status !== 'ACTIVE') {
+      return {
+        ok: false,
+        error: 'Associated store is not active. Device authentication is only permitted for active stores.',
+        status: 401,
+      };
+    }
+  }
+
+  // Generate both short-lived access token and rotated refresh token (Sliding Window)
+  const {
+    token: newAccessToken,
+    expiresIn: shortLivedExpiresIn,
+    expiresAt: shortLivedExpiresAt,
+  } = generateDeviceAccessToken(
     input.deviceId,
     resolvedStoreId,
     SHORT_LIVED_TOKEN_TTL_SECONDS,
   );
 
-  // 6. Update session in DB
-  await updateDeviceSession(db, {
-    deviceId: input.deviceId,
-    accessToken: token,
-    storeId: resolvedStoreId,
+  const {
+    token: newRefreshToken,
+    expiresIn: refreshExpiresIn,
+    expiresAt: refreshExpiresAt,
+  } = generateDeviceRefreshToken(
+    input.deviceId,
+    resolvedStoreId,
+    REFRESH_TOKEN_TTL_SECONDS,
+  );
+
+  await updateDeviceTokens(db, {
+    deviceId: device.deviceId,
+    accessToken: newAccessToken,
+    refreshToken: newRefreshToken,
+    expiresAt: refreshExpiresAt,
   });
 
   return {
     ok: true,
     data: {
       success: true,
-      accessToken: token,
-      ShortLivedToken: token,
-      shortLivedToken: token,
+      message: 'Device credential authentication and token rotation successful.',
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
       tokenType: 'Bearer',
-      expiresIn,
-      expiresAt: expiresAt.toISOString(),
+      expiresIn: shortLivedExpiresIn,
+      expiresAt: shortLivedExpiresAt.toISOString(),
+      refreshExpiresIn,
+      refreshExpiresAt: refreshExpiresAt.toISOString(),
       deviceId: device.deviceId,
-      storeId: resolvedStoreId,
+      status: device.status,
     },
   };
 }

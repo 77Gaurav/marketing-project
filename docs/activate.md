@@ -109,13 +109,10 @@ Upon valid activation within the 15-minute window:
 4. Returns:
 ```json
 {
+  "deviceID": "1",
   "status": "Activated",
-  "deviceId": "1",
-  "ShortLivedToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "RefreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "shortLivedToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "storeId": "63f239fa-0ad0-46cd-a79b-091b7b50d75b"
+  "shortlived": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "longlived": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 }
 ```
 
@@ -155,6 +152,7 @@ Upon valid activation within the 15-minute window:
 | `/api/admin/store/devices` | `POST` | Generates a 15-minute activation code | Store must be `ACTIVE` |
 | `/api/admin/store/devices` | `DELETE` | Deactivates an active device or cancels a pending code | Admin session |
 | `/admin/store/activate` | `POST` | Hardware activation endpoint called by Raspberry Pi players | Device must be pending & code valid |
+| `/api/devices/authenticate` | `POST` | Device authentication with Sliding Window Token Rotation & expired token recovery | Device must be activated in database |
 
 ---
 
@@ -174,17 +172,58 @@ curl -X POST http://localhost:3000/admin/store/activate \
 Expected output:
 ```json
 {
+  "deviceID": "1",
   "status": "Activated",
-  "deviceId": "1",
-  "ShortLivedToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "RefreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "storeId": "63f239fa-0ad0-46cd-a79b-091b7b50d75b"
+  "shortlived": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "longlived": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 }
 ```
 
 ---
 
-## 7. Database Schema Reference
+## 7. Device Authentication & Sliding Window Token Rotation
+
+Raspberry Pi hardware players periodically call `/api/devices/authenticate` using their `refreshToken` (or `Authorization: Bearer <refreshToken>`) to refresh their short-lived access tokens.
+
+### 7.1 Sliding Window Token Rotation on Success
+Upon successful authentication, the server generates:
+1. A fresh 3-day short-lived token (`accessToken` / `shortlived`).
+2. A rotated 1-month refresh token (`refreshToken` / `longlived`), extending its TTL by 30 days from the moment of authentication.
+
+```bash
+curl -X POST http://localhost:3000/api/devices/authenticate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }'
+```
+
+Response (HTTP 200):
+```json
+{
+  "success": true,
+  "message": "Device authentication and sliding window token rotation successful.",
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "tokenType": "Bearer",
+  "expiresIn": 259200,
+  "expiresAt": "2026-10-24T15:45:00.000Z",
+  "refreshExpiresIn": 2592000,
+  "refreshExpiresAt": "2026-11-20T15:45:00.000Z",
+  "deviceId": "1",
+  "status": "Activated"
+}
+```
+
+### 7.2 Expired Refresh Token Recovery
+If the player's `refreshToken` has expired (past 1 month):
+1. The server reads the `deviceId` from the expired token's claims, request body, or headers.
+2. Checks the PostgreSQL database to verify if the device is a valid, active registration (status `Activated`, not `REVOKED`, store active).
+3. If valid, generates and persists a brand-new short-lived and long-lived token pair, returning HTTP 200.
+
+---
+
+## 8. Database Schema Reference
 
 The `devices` table stores hardware display player registrations:
 

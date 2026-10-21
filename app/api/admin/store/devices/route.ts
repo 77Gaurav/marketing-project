@@ -111,7 +111,7 @@ export async function POST(request: Request) {
 
 /**
  * DELETE /api/admin/store/devices
- * Deactivates or removes a device / activation code.
+ * Deletes a device completely from the database or removes a pending activation code.
  */
 export async function DELETE(request: Request) {
   try {
@@ -129,13 +129,14 @@ export async function DELETE(request: Request) {
 
     if (!deviceId) {
       return NextResponse.json(
-        { error: 'deviceId is required to deactivate a device.' },
+        { error: 'deviceId is required to delete a device.' },
         { status: 400 },
       );
     }
 
-    const { deactivateDevice } = await import('@/device_backend');
-    const result = await deactivateDevice(getPool(), String(deviceId).trim());
+    const { deleteDevice, deactivateDevice } = await import('@/device_backend');
+    const deleteFn = deleteDevice || deactivateDevice;
+    const result = await deleteFn(getPool(), String(deviceId).trim());
 
     if (!result.ok) {
       return NextResponse.json({ error: result.status }, { status: 404 });
@@ -152,7 +153,7 @@ export async function DELETE(request: Request) {
   } catch (error: any) {
     console.error('[api/admin/store/devices] DELETE error:', error);
     return NextResponse.json(
-      { error: 'Failed to deactivate device: ' + (error?.message || '') },
+      { error: 'Failed to delete device: ' + (error?.message || '') },
       { status: 500 },
     );
   }
