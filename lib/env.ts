@@ -49,6 +49,12 @@ export interface ServerEnv {
   adminEmail: string;
   adminName: string;
   /**
+   * Separate credentials for the DBMS relational schema & records console at /admin/dbms.
+   * Managed via DBMS_USERNAME and DBMS_PASSWORD in .env.
+   */
+  dbmsUsername: string;
+  dbmsPassword: string;
+  /**
    * AWS S3 configuration for video uploads.
    */
   awsRegion: string;
@@ -143,6 +149,9 @@ function resolveSessionSecret(): string {
 const DEFAULT_ADMIN_USERNAME = 'admin';
 const DEFAULT_ADMIN_PASSWORD = 'admin';
 
+const DEFAULT_DBMS_USERNAME = 'dbadmin';
+const DEFAULT_DBMS_PASSWORD = 'dbms_admin_password';
+
 /**
  * Resolve the admin console password, refusing a default or weak one in production.
  *
@@ -166,6 +175,25 @@ function resolveAdminPassword(): string {
 
   return password ?? DEFAULT_ADMIN_PASSWORD;
 }
+
+/**
+ * Resolve the dedicated DBMS password from DBMS_PASSWORD or DBMS_ADMIN_PASSWORD.
+ */
+function resolveDbmsPassword(): string {
+  const password = read('DBMS_PASSWORD') ?? read('DBMS_ADMIN_PASSWORD');
+  const isDefault = password === undefined || password === DEFAULT_DBMS_PASSWORD;
+
+  if (process.env.NODE_ENV === 'production' && (isDefault || (password?.length ?? 0) < 8)) {
+    throw new Error(
+      isDefault
+        ? 'DBMS_PASSWORD is not set. Set a unique DBMS password in .env before deploying.'
+        : 'DBMS_PASSWORD must be at least 8 characters in production.',
+    );
+  }
+
+  return password ?? DEFAULT_DBMS_PASSWORD;
+}
+
 
 /**
  * Resolve the OAuth callback origin, refusing to guess one in production.
@@ -219,6 +247,8 @@ export function getServerEnv(): ServerEnv {
     adminPassword: resolveAdminPassword(),
     adminEmail: read('ADMIN_EMAIL') ?? 'admin@stringtheory.test',
     adminName: read('ADMIN_NAME') ?? 'Network admin',
+    dbmsUsername: read('DBMS_USERNAME') ?? read('DBMS_ADMIN_USERNAME') ?? DEFAULT_DBMS_USERNAME,
+    dbmsPassword: resolveDbmsPassword(),
     awsRegion: read('AWS_REGION') ?? 'us-east-1',
     s3OriginalBucket: read('S3_ORIGINAL_BUCKET') ?? read('AWS_S3_BUCKET') ?? '',
     s3EncodedBucket: read('S3_ENCODED_BUCKET') ?? read('AWS_S3_BUCKET') ?? '',

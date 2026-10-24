@@ -296,3 +296,138 @@ export async function deleteRecordByPrimaryKey(
     };
   }
 }
+
+export interface ForeignKeyRelation {
+  fromTable: string;
+  fromColumn: string;
+  toTable: string;
+  toColumn: string;
+  constraintName: string;
+}
+
+export interface DetailedTableSchema {
+  name: string;
+  rowCount: number;
+  columnCount: number;
+  primaryKey: string | null;
+  columns: (ColumnMeta & {
+    foreignKey?: {
+      toTable: string;
+      toColumn: string;
+      constraintName: string;
+    };
+  })[];
+  outgoingRelations: {
+    fromColumn: string;
+    toTable: string;
+    toColumn: string;
+    constraintName: string;
+  }[];
+  incomingRelations: {
+    fromTable: string;
+    fromColumn: string;
+    toColumn: string;
+    constraintName: string;
+  }[];
+}
+
+export interface DatabaseRelationalSchema {
+  tables: DetailedTableSchema[];
+  relations: ForeignKeyRelation[];
+  summary: {
+    totalTables: number;
+    totalRows: number;
+    totalRelations: number;
+  };
+}
+
+/**
+ * Fetch all foreign key relationships defined across public tables.
+ */
+export async function getDatabaseRelationships(db: Executor): Promise<ForeignKeyRelation[]> {
+  const result = await db.query<ForeignKeyRelation>(`
+    SELECT
+      tc.table_name AS "fromTable",
+      kcu.column_name AS "fromColumn",
+      ccu.table_name AS "toTable",
+      ccu.column_name AS "toColumn",
+      tc.constraint_name AS "constraintName"
+    FROM information_schema.table_constraints AS tc
+    JOIN information_schema.key_column_usage AS kcu
+      ON tc.constraint_name = kcu.constraint_name
+      AND tc.table_schema = kcu.table_schema
+    JOIN information_schema.constraint_column_usage AS ccu
+      ON ccu.constraint_name = tc.constraint_name
+      AND ccu.table_schema = tc.table_schema
+    WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public'
+    ORDER BY tc.table_name, kcu.column_name;
+  `);
+
+  return result.rows;
+}
+
+/**
+ * Build the full relational schema model with tables, columns, constraints and connected relationships.
+ */
+export async function getDatabaseRelationalSchema(db: Executor): Promise<DatabaseRelationalSchema> {
+  const tableSummaries = await listAllTables(db);
+  const relations = await getDatabaseRelationships(db);
+
+  const tables: DetailedTableSchema[] = [];
+  let totalRows = 0;
+
+  for (const summary of tableSummaries) {
+    totalRows += summary.rowCount;
+    const { columns, primaryKey } = await getTableColumns(db, summary.name);
+
+    // Map outgoing relations (this table references another)
+    const outgoing = relations.filter((r) => r.fromTable === summary.name);
+    // Map incoming relations (other tables reference this table)
+    const incoming = relations.filter((r) => r.toTable === summary.name);
+
+    const detailedColumns = columns.map((col) => {
+      const fk = outgoing.find((r) => r.fromColumn === col.name);
+      return {
+        ...col,
+        foreignKey: fk
+          ? {
+              toTable: fk.toTable,
+              toColumn: fk.toColumn,
+              constraintName: fk.constraintName,
+            }
+          : undefined,
+      };
+    });
+
+    tables.push({
+      name: summary.name,
+      rowCount: summary.rowCount,
+      columnCount: summary.columnCount,
+      primaryKey,
+      columns: detailedColumns,
+      outgoingRelations: outgoing.map((r) => ({
+        fromColumn: r.fromColumn,
+        toTable: r.toTable,
+        toColumn: r.toColumn,
+        constraintName: r.constraintName,
+      })),
+      incomingRelations: incoming.map((r) => ({
+        fromTable: r.fromTable,
+        fromColumn: r.fromColumn,
+        toColumn: r.toColumn,
+        constraintName: r.constraintName,
+      })),
+    });
+  }
+
+  return {
+    tables,
+    relations,
+    summary: {
+      totalTables: tables.length,
+      totalRows,
+      totalRelations: relations.length,
+    },
+  };
+}
+

@@ -10,6 +10,7 @@ import { getPool } from '@/lib/db/pool';
 import { listBrands } from '@/lib/db/repositories/brands';
 import { listStores } from '@/lib/db/repositories/stores';
 import { listAllTables } from '@/lib/db/repositories/database-explorer';
+import { listAdminCampaigns } from '@/device_backend';
 import { Eyebrow } from '@/components/ui/Section';
 
 /**
@@ -92,9 +93,10 @@ export default async function AdminPage() {
 
   // Read here rather than in the client: the console's first paint needs no loading state, and a
   // server-rendered list cannot briefly show a stale or partial set of rows.
-  const [brands, stores, tables] = await Promise.all([
+  const [brands, stores, campaigns, tables] = await Promise.all([
     listBrands(getPool()),
     listStores(getPool()),
+    listAdminCampaigns(getPool()).catch(() => []),
     listAllTables(getPool()).catch(() => []),
   ]);
 
@@ -104,6 +106,7 @@ export default async function AdminPage() {
         admin={{ fullName: session.fullName, email: session.email }}
         initialBrands={brands}
         initialStores={stores}
+        initialCampaigns={campaigns}
         initialTables={tables}
         weakPasswordWarning={adminPasswordIsWeak()}
       />
