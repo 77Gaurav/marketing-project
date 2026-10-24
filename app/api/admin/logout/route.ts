@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { SESSION_COOKIE, sessionCookieOptions } from '@/lib/auth/session';
+import { traceAdminRequest, logAdminInfo } from '@/lib/observability/logfire';
 
 /**
  * POST /api/admin/logout — drop the session.
@@ -14,8 +15,19 @@ import { SESSION_COOKIE, sessionCookieOptions } from '@/lib/auth/session';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST() {
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set(SESSION_COOKIE, '', { ...sessionCookieOptions(), maxAge: 0 });
-  return response;
+export async function POST(request: Request) {
+  return await traceAdminRequest(
+    {
+      name: 'admin.api: POST /api/admin/logout',
+      method: 'POST',
+      path: '/api/admin/logout',
+      request,
+    },
+    async () => {
+      const response = NextResponse.json({ ok: true });
+      response.cookies.set(SESSION_COOKIE, '', { ...sessionCookieOptions(), maxAge: 0 });
+      logAdminInfo('[admin/logout] Admin session cleared');
+      return response;
+    },
+  );
 }

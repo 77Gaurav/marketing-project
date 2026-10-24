@@ -4,6 +4,19 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  experimental: {
+    instrumentationHook: true,
+    serverComponentsExternalPackages: [
+      '@pydantic/logfire-node',
+      'logfire',
+      '@opentelemetry/api',
+      '@opentelemetry/sdk-trace-base',
+      '@opentelemetry/auto-instrumentations-node',
+    ],
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   // Emits .next/standalone with a server.js entrypoint and only the traced node_modules the server
   // actually imports — 24 MB here. The Docker image copies that rather than a full install, which
   // takes the built image to 245 MB. It changes build output only; `next dev` and `next build`

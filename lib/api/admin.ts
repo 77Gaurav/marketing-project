@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { requireAdminSession } from '@/lib/auth/admin';
 import type { User } from '@/lib/db/types';
+import {
+  traceAdminRequest,
+  traceAdminChildSpan,
+  logAdminInfo,
+  logAdminWarn,
+  logAdminError,
+} from '@/lib/observability/logfire';
 
 /**
  * Request plumbing shared by the admin routes.
@@ -30,24 +37,77 @@ export function errorResponse(body: ErrorBody, status: number): NextResponse {
  * The 401 and 403 are kept distinct: no session is a sign-in problem, the wrong role is a permission
  * problem, and reporting both as one status makes a dropped cookie indistinguishable from a
  * misconfigured role.
+ *
+ * Automatically instrumented with Pydantic Logfire:
+ * Creates root trace & span `admin.api: {method} {path}`, child span for admin auth session,
+ * and child span for route handler execution, logging processing, success, and failure lifecycles.
  */
 export async function withAdmin(
-  handler: (admin: User) => Promise<NextResponse>,
+  handlerOrRequest: ((admin: User) => Promise<NextResponse>) | Request,
+  maybeHandler?: (admin: User) => Promise<NextResponse>,
 ): Promise<NextResponse> {
-  let guard;
-  try {
-    guard = await requireAdminSession();
-  } catch (error) {
-    // No session lookup means no database round trip, so this is a real fault rather than a refusal.
-    console.error('[admin] identity resolution failed', error);
-    return errorResponse({ error: 'Could not verify your session. Try again shortly.' }, 503);
+  const req = typeof handlerOrRequest === 'function' ? undefined : handlerOrRequest;
+  const handler = typeof handlerOrRequest === 'function' ? handlerOrRequest : maybeHandler!;
+
+  let path = '/api/admin';
+  let method = req ? req.method : 'GET';
+
+  if (req) {
+    try {
+      path = new URL(req.url).pathname;
+    } catch {}
+  } else {
+    try {
+      const { headers } = require('next/headers');
+      const h = headers();
+      path = h.get('x-url') || h.get('x-invoke-path') || h.get('next-url') || '/api/admin';
+      method = h.get('x-method') || 'GET';
+    } catch {}
   }
 
-  if (!guard.ok) {
-    return errorResponse({ error: guard.error }, guard.status);
-  }
+  return await traceAdminRequest(
+    {
+      name: `admin.api: ${method} ${path}`,
+      method,
+      path,
+      request: req,
+    },
+    async () => {
+      let guard;
+      try {
+        guard = await traceAdminChildSpan('admin.auth.session', { path }, async () => {
+          return await requireAdminSession();
+        });
+      } catch (error) {
+        logAdminError('[admin] identity resolution failed', error, { path });
+        return errorResponse({ error: 'Could not verify your session. Try again shortly.' }, 503);
+      }
 
-  return handler(guard.admin);
+      if (!guard.ok) {
+        logAdminWarn(`[admin] access denied: ${guard.error}`, { path, status: guard.status });
+        return errorResponse({ error: guard.error }, guard.status);
+      }
+
+      logAdminInfo('[admin] admin session verified', {
+        path,
+        adminId: guard.admin.id,
+        adminEmail: guard.admin.email,
+        adminRole: guard.admin.role,
+      });
+
+      return await traceAdminChildSpan(
+        `admin.handler: ${method} ${path}`,
+        {
+          path,
+          adminId: guard.admin.id,
+          adminEmail: guard.admin.email,
+        },
+        async () => {
+          return await handler(guard.admin);
+        },
+      );
+    },
+  );
 }
 
 /**
