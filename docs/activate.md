@@ -223,7 +223,62 @@ If the player's `refreshToken` has expired (past 1 month):
 
 ---
 
-## 8. Database Schema Reference
+## 8. Hourly Hardware Player Task Polling (`/api/devices/:deviceID/tasks`)
+
+Raspberry Pi hardware display players poll the backend every hour to synchronize assigned advertising tasks and download video creatives.
+
+### 8.1 Polling Endpoint
+`GET /api/devices/:deviceID/tasks?sinceRevision=42`
+
+- **Headers**: `Authorization: Bearer <accessToken>` (optional/validated) or `x-device-token: <accessToken>`
+- **Query Parameters**:
+  - `sinceRevision`: The latest revision integer previously processed by the player.
+
+### 8.2 Task Actions & Response Schema
+A task represents a campaign scheduled for the player's store:
+- `UPSERT`: New campaign or updated creative video (download via S3 presigned URL).
+- `DEACTIVATE`: Campaign paused/deactivated (keep video locally, pause playback).
+- `DELETE`: Campaign removed (delete cached video locally).
+
+```json
+{
+  "revision": 43,
+  "changes": [
+    {
+      "taskId": "task_123",
+      "version": 2,
+      "action": "UPSERT",
+      "status": "ACTIVE",
+      "creativeId": "creative_456",
+      "downloadUrl": "https://st-media-encoded.s3.ap-south-1.amazonaws.com/videos/creative_456.mp4?...",
+      "expiresAt": "2026-10-25T12:00:00Z",
+      "playsPerHour": 10
+    },
+    {
+      "taskId": "task_789",
+      "version": 3,
+      "action": "DEACTIVATE"
+    },
+    {
+      "taskId": "task_012",
+      "version": 4,
+      "action": "DELETE"
+    }
+  ]
+}
+```
+
+If no changes have occurred since `sinceRevision`, the backend responds with `changes: []`:
+```json
+{
+  "revision": 43,
+  "changes": []
+}
+```
+
+---
+
+## 9. Database Schema Reference
 
 The `devices` table stores hardware display player registrations:
 

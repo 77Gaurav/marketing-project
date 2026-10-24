@@ -86,7 +86,9 @@ export async function findStoreByIdOrSlug(
   if (isUuid) {
     const result = await db.query(
       `SELECT id, name, slug, location, screen_count, website, owner_user_id,
-              contact_name, contact_email, contact_phone, status, created_at
+              contact_name, contact_email, contact_phone, status, created_at,
+              creative_url, creative_key, creative_bucket, creative_type,
+              video_url, video_key, video_bucket
        FROM stores
        WHERE id = $1
        LIMIT 1`,
@@ -107,6 +109,13 @@ export async function findStoreByIdOrSlug(
         contactPhone: row.contact_phone,
         status: row.status,
         createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+        creativeUrl: row.creative_url ?? null,
+        creativeKey: row.creative_key ?? null,
+        creativeBucket: row.creative_bucket ?? null,
+        creativeType: row.creative_type ?? null,
+        videoUrl: row.video_url ?? null,
+        videoKey: row.video_key ?? null,
+        videoBucket: row.video_bucket ?? null,
       };
     }
   }
@@ -114,7 +123,9 @@ export async function findStoreByIdOrSlug(
   // Fallback: look up by slug (case-insensitive) or name
   const result = await db.query(
     `SELECT id, name, slug, location, screen_count, website, owner_user_id,
-            contact_name, contact_email, contact_phone, status, created_at
+            contact_name, contact_email, contact_phone, status, created_at,
+            creative_url, creative_key, creative_bucket, creative_type,
+            video_url, video_key, video_bucket
      FROM stores
      WHERE LOWER(slug) = LOWER($1) OR slug = $1 OR LOWER(name) = LOWER($1)
      LIMIT 1`,
@@ -136,6 +147,13 @@ export async function findStoreByIdOrSlug(
       contactPhone: row.contact_phone,
       status: row.status,
       createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+      creativeUrl: row.creative_url ?? null,
+      creativeKey: row.creative_key ?? null,
+      creativeBucket: row.creative_bucket ?? null,
+      creativeType: row.creative_type ?? null,
+      videoUrl: row.video_url ?? null,
+      videoKey: row.video_key ?? null,
+      videoBucket: row.video_bucket ?? null,
     };
   }
 

@@ -241,3 +241,19 @@ export async function listBrandsForUser(db: Executor, ownerUserId: string): Prom
 
   return result.rows.map(toBrand);
 }
+
+/**
+ * Update a brand's status (e.g. ACTIVE vs SUSPENDED / PENDING_REVIEW).
+ */
+export async function updateBrandStatus(
+  db: Executor,
+  id: string,
+  status: BrandStatus,
+): Promise<Brand | null> {
+  const result = await db.query<BrandRow>(
+    `UPDATE brands SET status = $1, updated_at = now() WHERE id = $2 RETURNING ${COLUMNS}`,
+    [status, id],
+  );
+  return result.rows[0] ? toBrand(result.rows[0]) : null;
+}
+

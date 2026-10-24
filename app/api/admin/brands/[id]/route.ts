@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { errorResponse, withAdmin } from '@/lib/api/admin';
 import { getPool, withTransaction } from '@/lib/db/pool';
-import { countCampaignsForBrand, deleteBrand, findBrandById } from '@/lib/db/repositories/brands';
+import { countCampaignsForBrand, deleteBrand, findBrandById, updateBrandStatus } from '@/lib/db/repositories/brands';
+import type { BrandStatus } from '@/lib/db/types';
 
 /**
  * DELETE /api/admin/brands/[id] — remove a brand and everything under it.
@@ -77,10 +78,17 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
         );
       }
 
+      let s3DeletedCount = 0;
       // One transaction for the count check and the delete, so nothing can be created in between.
       const deleted = await withTransaction(async (tx) => {
         const current = await countCampaignsForBrand(tx, brand.id);
         if (current !== campaignCount) return false;
+
+        // Clean up all S3 creative assets (brand video and all campaign videos)
+        const { deleteBrandS3Creatives } = await import('@/lib/aws/s3');
+        const s3Cleaned = await deleteBrandS3Creatives(tx, brand.id);
+        s3DeletedCount = s3Cleaned.deletedCount;
+
         return deleteBrand(tx, brand.id);
       });
 
@@ -95,10 +103,55 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
         );
       }
 
-      return NextResponse.json({ deleted: true, brandId: brand.id, campaignsDeleted: campaignCount });
+      return NextResponse.json({
+        deleted: true,
+        brandId: brand.id,
+        campaignsDeleted: campaignCount,
+        s3CreativesDeleted: s3DeletedCount,
+      });
     } catch (error) {
       console.error('[admin] brand deletion failed', error);
       return errorResponse({ error: 'Could not delete this brand.' }, 500);
     }
   });
 }
+
+/**
+ * PATCH /api/admin/brands/[id] — update brand status (e.g. deactivate / suspend, or reactivate).
+ */
+export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+  return withAdmin(async () => {
+    if (!UUID_PATTERN.test(params.id)) {
+      return errorResponse({ error: 'Not a valid brand id.' }, 400);
+    }
+
+    try {
+      const body = await request.json().catch(() => ({}));
+      const status = body?.status as BrandStatus | undefined;
+
+      const validStatuses: BrandStatus[] = ['ACTIVE', 'PENDING_REVIEW', 'SUSPENDED'];
+      if (!status || !validStatuses.includes(status)) {
+        return errorResponse(
+          { error: `Invalid brand status. Expected one of: ${validStatuses.join(', ')}` },
+          400,
+        );
+      }
+
+      const db = getPool();
+      const updated = await updateBrandStatus(db, params.id, status);
+      if (!updated) {
+        return errorResponse({ error: 'Brand not found.' }, 404);
+      }
+
+      return NextResponse.json({
+        success: true,
+        brand: updated,
+        message: status === 'SUSPENDED' ? 'Brand deactivated.' : `Brand status updated to ${status}.`,
+      });
+    } catch (error) {
+      console.error('[admin] brand status update failed', error);
+      return errorResponse({ error: 'Could not update brand status.' }, 500);
+    }
+  });
+}
+

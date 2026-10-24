@@ -137,3 +137,56 @@ export interface DeviceActivationSuccessResult {
   storeId?: string | null;
 }
 
+/**
+ * Task Action types for screen player synchronization.
+ */
+export type TaskAction = 'UPSERT' | 'DEACTIVATE' | 'DELETE';
+
+export interface TaskChangeUpsert {
+  taskId: string;
+  version: number;
+  action: 'UPSERT';
+  status: 'ACTIVE' | string;
+  creativeId: string;
+  downloadUrl: string;
+  expiresAt: string;
+  playsPerHour: number;
+  storeId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface TaskChangeDeactivate {
+  taskId: string;
+  version: number;
+  action: 'DEACTIVATE';
+}
+
+export interface TaskChangeDelete {
+  taskId: string;
+  version: number;
+  action: 'DELETE';
+}
+
+export type TaskChange = TaskChangeUpsert | TaskChangeDeactivate | TaskChangeDelete;
+
+export interface DeviceTasksResponse {
+  revision: number;
+  changes: TaskChange[];
+}
+
+export interface StoreTaskEventRow {
+  id: string;
+  revision: string | number;
+  store_id: string;
+  task_id: string;
+  version: number;
+  action: TaskAction;
+  status: string | null;
+  creative_id: string | null;
+  s3_bucket: string | null;
+  s3_key: string | null;
+  plays_per_hour: number | null;
+  metadata: Record<string, unknown> | null;
+  created_at: Date;
+}
+

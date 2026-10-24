@@ -11,4 +11,5 @@ export * from './token';
 export * from './repository';
 export * from './validation';
 export * from './service';
+export * from './tasks';
 export * from './route-handler';
