@@ -16,8 +16,8 @@ export type UserRole = (typeof USER_ROLES)[number];
 export const BRAND_STATUSES = ['PENDING_REVIEW', 'ACTIVE', 'SUSPENDED'] as const;
 export type BrandStatus = (typeof BRAND_STATUSES)[number];
 
-export const STORE_STATUSES = ['PENDING_REVIEW', 'ACTIVE', 'PAUSED', 'CLOSED'] as const;
-export type StoreStatus = (typeof STORE_STATUSES)[number];
+export const STORE_STATUSES = ['ACTIVE', 'PENDING', 'DEACTIVATED'] as const;
+export type StoreStatus = (typeof STORE_STATUSES)[number] | 'PENDING_REVIEW' | 'PAUSED' | 'CLOSED';
 
 export const CAMPAIGN_STATUSES = [
   'DRAFT',
@@ -114,6 +114,30 @@ export interface Store {
   contactPhone: string | null;
   status: StoreStatus;
   createdAt: string;
+  creativeUrl?: string | null;
+  creativeKey?: string | null;
+  creativeBucket?: string | null;
+  creativeType?: string | null;
+  videoUrl?: string | null;
+  videoKey?: string | null;
+  videoBucket?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  coordinates?: { lat: number; lng: number } | null;
+}
+
+export interface StoreCreative {
+  id: string;
+  storeId: string;
+  name: string;
+  mimeType: string;
+  fileSize: number | null;
+  s3Bucket: string;
+  s3Key: string;
+  url: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Campaign {

@@ -92,6 +92,15 @@ const screenCountField = z.preprocess(
  * going down. `location` and `screen_count` are required for the same reason the admin list shows
  * them — a venue with neither cannot be matched to a campaign.
  */
+const coordinateField = z.preprocess(
+  (val) => {
+    if (val === '' || val === null || val === undefined) return null;
+    const num = typeof val === 'string' ? Number(val.trim()) : Number(val);
+    return Number.isFinite(num) ? num : null;
+  },
+  z.number().nullable().optional(),
+);
+
 export const adminStoreSchema = z.object({
   name: nameField('Store name'),
   location: z
@@ -104,7 +113,20 @@ export const adminStoreSchema = z.object({
   contactName: optionalNameField('Contact name'),
   contactEmail: emailField,
   contactPhone: optionalPhoneField,
-  status: z.enum(STORE_STATUSES).default('ACTIVE'),
+  status: z.preprocess(
+    (val) => {
+      if (typeof val === 'string') {
+        const upper = val.toUpperCase().trim();
+        if (upper === 'PAUSED' || upper === 'CLOSED') return 'DEACTIVATED';
+        if (upper === 'PENDING_REVIEW') return 'PENDING';
+        return upper;
+      }
+      return val;
+    },
+    z.enum(STORE_STATUSES).default('ACTIVE'),
+  ),
+  latitude: coordinateField,
+  longitude: coordinateField,
 });
 
 export type AdminStoreInput = z.input<typeof adminStoreSchema>;

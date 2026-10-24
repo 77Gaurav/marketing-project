@@ -58,6 +58,10 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
       const { deleteRunningActivationsForStore } = await import('@/device_backend');
       await deleteRunningActivationsForStore(db, store.id);
 
+      // Clean up all S3 creative assets (images, videos) associated with this store
+      const { deleteStoreS3Creatives } = await import('@/lib/aws/s3');
+      const s3Cleaned = await deleteStoreS3Creatives(db, store.id);
+
       const deleted = await deleteStore(db, store.id);
       if (!deleted) {
         return errorResponse({ error: 'Store not found.' }, 404);
@@ -67,6 +71,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
         deleted: true,
         storeId: store.id,
         screensRemoved: store.screenCount,
+        s3CreativesDeleted: s3Cleaned.deletedCount,
       });
     } catch (error) {
       console.error('[admin] store deletion failed', error);
@@ -78,24 +83,47 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   return withAdmin(async () => {
     try {
-      const { updateStoreStatus } = await import('@/lib/db/repositories/stores');
+      const { updateStoreStatus, updateStoreLocationAndCoordinates } = await import('@/lib/db/repositories/stores');
       const { deleteRunningActivationsForStore } = await import('@/device_backend');
       const body = await request.json();
       const status = body?.status;
-
-      if (!status || !['PENDING_REVIEW', 'ACTIVE', 'PAUSED', 'CLOSED'].includes(status)) {
-        return errorResponse({ error: 'Invalid store status.' }, 400);
-      }
-
       const db = getPool();
 
-      // If store is being deactivated (status !== 'ACTIVE'), delete any running activation first
+      // If location / coordinates update
+      if (body?.latitude !== undefined || body?.longitude !== undefined || body?.location !== undefined) {
+        const lat = body.latitude !== null && body.latitude !== undefined ? Number(body.latitude) : null;
+        const lng = body.longitude !== null && body.longitude !== undefined ? Number(body.longitude) : null;
+        const updated = await updateStoreLocationAndCoordinates(db, params.id, {
+          location: body.location,
+          latitude: lat,
+          longitude: lng,
+        });
+
+        if (!updated) {
+          return errorResponse({ error: 'Store not found.' }, 404);
+        }
+
+        return NextResponse.json({
+          success: true,
+          store: updated,
+        });
+      }
+
+      let targetStatus = status;
+      if (targetStatus === 'PAUSED' || targetStatus === 'CLOSED') targetStatus = 'DEACTIVATED';
+      if (targetStatus === 'PENDING_REVIEW') targetStatus = 'PENDING';
+
+      if (!targetStatus || !['ACTIVE', 'PENDING', 'DEACTIVATED', 'PENDING_REVIEW', 'PAUSED', 'CLOSED'].includes(targetStatus)) {
+        return errorResponse({ error: 'Invalid store status or parameters.' }, 400);
+      }
+
+      // If store is being deactivated (targetStatus !== 'ACTIVE'), delete any running activation first
       let activationsDeleted = 0;
-      if (status !== 'ACTIVE') {
+      if (targetStatus !== 'ACTIVE') {
         activationsDeleted = await deleteRunningActivationsForStore(db, params.id);
       }
 
-      const updated = await updateStoreStatus(db, params.id, status);
+      const updated = await updateStoreStatus(db, params.id, targetStatus);
       if (!updated) {
         return errorResponse({ error: 'Store not found.' }, 404);
       }

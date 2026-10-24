@@ -119,24 +119,37 @@ export type SelectProps = FieldRenderProps &
  * re-earn. The one thing it cannot do is show a chevron that inherits the current colour, so it is
  * drawn with a mask-image over a background colour instead.
  */
-export function Select({ describedBy, invalid, children, ...props }: SelectProps) {
+export function Select({
+  describedBy,
+  invalid,
+  children,
+  className = '',
+  ...props
+}: SelectProps & { className?: string }) {
   return (
-    <select
-      {...props}
-      aria-describedby={describedBy}
-      aria-invalid={invalid || undefined}
-      className={`${invalid ? CONTROL_INVALID : CONTROL_RESTING} min-h-[48px] cursor-pointer appearance-none bg-[length:1.1rem] bg-[right_1rem_center] bg-no-repeat pr-11`}
-      style={{
-        // Inline because Tailwind cannot express a mask-image with a currentColor-derived colour in
-        // a way that survives the build's purge.
-        maskImage:
-          "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='black'><path d='M5.5 7.5 10 12l4.5-4.5'/></svg>\")",
-        maskPosition: 'right 0.9rem center',
-        maskRepeat: 'no-repeat',
-        maskSize: '1.1rem',
-      }}
-    >
-      {children}
-    </select>
+    <div className="relative w-full">
+      <select
+        {...props}
+        aria-describedby={describedBy}
+        aria-invalid={invalid || undefined}
+        className={`${
+          invalid ? CONTROL_INVALID : CONTROL_RESTING
+        } min-h-[48px] w-full cursor-pointer appearance-none rounded-md border border-line-strong bg-paper px-4 pr-11 text-sm font-medium text-ink shadow-xs transition-colors hover:border-ink/40 focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+      >
+        {children}
+      </select>
+      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5 text-ink-muted">
+        <svg
+          className="h-4 w-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+    </div>
   );
 }

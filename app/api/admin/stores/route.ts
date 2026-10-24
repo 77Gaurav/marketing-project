@@ -65,6 +65,8 @@ export async function POST(request: Request) {
         contactEmail: draft.contactEmail,
         contactPhone: draft.contactPhone,
         status: draft.status,
+        latitude: draft.latitude,
+        longitude: draft.longitude,
       });
 
       return NextResponse.json({ store }, { status: 201 });

@@ -7,6 +7,7 @@ import {
   Check,
   Clock,
   Copy,
+  Lock,
   MapPin,
   Play,
   Power,
@@ -18,8 +19,12 @@ import {
   Terminal,
   Trash2,
   Tv,
+  Compass,
+  Save,
 } from 'lucide-react';
 import type { Store, Device } from '@/lib/db/types';
+import StoreCreativeInput from '@/components/store/StoreCreativeInput';
+import StoreLocationPicker from '@/components/store/StoreLocationPicker';
 
 interface StoreDetailConsoleProps {
   admin: { fullName: string; email: string };
@@ -68,10 +73,59 @@ export default function StoreDetailConsole({
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [isSimulatingActivation, setIsSimulatingActivation] = useState(false);
   const [notification, setNotification] = useState<{
     message: string;
     type: 'success' | 'error' | 'info';
   } | null>(null);
+
+  const [isSavingLocation, setIsSavingLocation] = useState(false);
+  const [locationDraft, setLocationDraft] = useState(initialStore.location || '');
+  const [latitudeDraft, setLatitudeDraft] = useState<number | null>(initialStore.latitude ?? 12.9716);
+  const [longitudeDraft, setLongitudeDraft] = useState<number | null>(initialStore.longitude ?? 77.5946);
+  const [locationSavedNotice, setLocationSavedNotice] = useState<string | null>(null);
+
+  async function handleSaveLocationCoordinates() {
+    setIsSavingLocation(true);
+    setLocationSavedNotice(null);
+    try {
+      const res = await fetch(`/api/admin/stores/${store.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: locationDraft,
+          latitude: latitudeDraft,
+          longitude: longitudeDraft,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to update store location.');
+      }
+
+      const data = await res.json();
+      if (data.store) {
+        setStore((prev) => ({
+          ...prev,
+          location: data.store.location,
+          latitude: data.store.latitude,
+          longitude: data.store.longitude,
+          coordinates: data.store.coordinates,
+        }));
+      }
+
+      setLocationSavedNotice('Location and OpenFreeMap coordinates updated!');
+      setTimeout(() => setLocationSavedNotice(null), 4000);
+    } catch (err: any) {
+      setNotification({
+        message: err.message || 'Could not save location.',
+        type: 'error',
+      });
+    } finally {
+      setIsSavingLocation(false);
+    }
+  }
 
   // 15-minute countdown timer effect
   useEffect(() => {
@@ -155,9 +209,8 @@ export default function StoreDetailConsole({
     }, 2000);
   }
 
-  // Toggle Store Active/Inactive status
-  async function handleToggleStoreStatus() {
-    const nextStatus = store.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+  // Change Store status (Active / Pending / Deactivated)
+  async function handleChangeStoreStatus(targetStatus: string) {
     setIsActivatingStore(true);
     setNotification(null);
 
@@ -165,7 +218,7 @@ export default function StoreDetailConsole({
       const res = await fetch(`/api/admin/stores/${store.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus }),
+        body: JSON.stringify({ status: targetStatus }),
       });
 
       const data = await res.json();
@@ -174,15 +227,14 @@ export default function StoreDetailConsole({
       }
 
       setStore(data.store);
-      if (nextStatus !== 'ACTIVE') {
+      if (targetStatus !== 'ACTIVE') {
         setPendingActivation(null);
       }
 
       setNotification({
-        message:
-          nextStatus !== 'ACTIVE'
-            ? `Store deactivated. Any running activation code has been deleted.`
-            : `Store activated successfully.`,
+        message: `Store status set to ${
+          targetStatus === 'ACTIVE' ? 'Active' : targetStatus === 'PENDING' ? 'Pending' : 'Deactivated'
+        }.`,
         type: 'success',
       });
 
@@ -249,6 +301,47 @@ export default function StoreDetailConsole({
       });
     } finally {
       setIsGeneratingCode(false);
+    }
+  }
+
+  // Simulate Device Activation via /admin/store/activate
+  async function handleSimulateActivation() {
+    if (!pendingActivation) return;
+
+    setIsSimulatingActivation(true);
+    setNotification(null);
+
+    try {
+      const res = await fetch('/admin/store/activate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          DeviceId: pendingActivation.deviceId,
+          ActivationCode: pendingActivation.activationCode,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Activation failed');
+      }
+
+      setNotification({
+        message: `Device #${data.deviceID} activated successfully at /admin/store/activate!`,
+        type: 'success',
+      });
+      setPendingActivation(null);
+      await refreshData();
+    } catch (err: any) {
+      setNotification({
+        message: err.message || 'Could not activate device.',
+        type: 'error',
+      });
+    } finally {
+      setIsSimulatingActivation(false);
     }
   }
 
@@ -356,12 +449,17 @@ export default function StoreDetailConsole({
             {store.status === 'ACTIVE' ? (
               <span className="inline-flex items-center gap-1.5 rounded-pill bg-state-ok/15 px-3 py-1 text-xs font-bold text-state-ok">
                 <span className="h-1.5 w-1.5 rounded-full bg-state-ok" />
-                Store Active
+                Active
               </span>
-            ) : (
+            ) : store.status === 'PENDING' || store.status === 'PENDING_REVIEW' ? (
               <span className="inline-flex items-center gap-1.5 rounded-pill bg-state-run/15 px-3 py-1 text-xs font-bold text-state-run">
                 <span className="h-1.5 w-1.5 rounded-full bg-state-run" />
-                {store.status || 'Pending Review'}
+                Pending
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-pill bg-state-error/15 px-3 py-1 text-xs font-bold text-state-error">
+                <span className="h-1.5 w-1.5 rounded-full bg-state-error" />
+                Deactivated
               </span>
             )}
           </div>
@@ -387,33 +485,64 @@ export default function StoreDetailConsole({
                 <span>{store.contactEmail}</span>
               </>
             )}
+            {store.latitude != null && store.longitude != null && (
+              <>
+                <span>•</span>
+                <div className="flex items-center gap-1.5 font-mono text-xs text-ink-muted">
+                  <Compass className="h-3.5 w-3.5 text-state-ok" />
+                  <span>
+                    BLR: {Number(store.latitude).toFixed(4)}, {Number(store.longitude).toFixed(4)}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Store Activate / Deactivate Toggle Button */}
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={handleToggleStoreStatus}
-            disabled={isActivatingStore}
-            className={`inline-flex min-h-[46px] items-center gap-2.5 rounded-pill px-6 py-2.5 text-sm font-bold transition-all shadow-sm ${
-              store.status === 'ACTIVE'
-                ? 'border border-state-run/50 bg-paper text-state-run hover:bg-state-run/10'
-                : 'bg-state-ok text-paper-raised hover:bg-state-ok/90'
-            }`}
-          >
-            {store.status === 'ACTIVE' ? (
-              <>
-                <PowerOff className="h-4 w-4" />
-                {isActivatingStore ? 'Updating...' : 'Deactivate Store'}
-              </>
-            ) : (
-              <>
-                <Power className="h-4 w-4" />
-                {isActivatingStore ? 'Updating...' : 'Activate Store'}
-              </>
-            )}
-          </button>
+        {/* Store Status Selection (Active / Pending / Deactivated) */}
+        <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-line-strong bg-paper p-1.5 shadow-xs">
+          {[
+            {
+              value: 'ACTIVE',
+              label: 'Active',
+              dot: 'bg-state-ok',
+              activeClass: 'border-state-ok bg-state-ok/15 text-state-ok font-bold shadow-xs',
+              defaultClass: 'border-transparent text-ink-muted hover:text-ink hover:bg-paper-raised',
+            },
+            {
+              value: 'PENDING',
+              label: 'Pending',
+              dot: 'bg-state-run',
+              activeClass: 'border-state-run bg-state-run/15 text-state-run font-bold shadow-xs',
+              defaultClass: 'border-transparent text-ink-muted hover:text-ink hover:bg-paper-raised',
+            },
+            {
+              value: 'DEACTIVATED',
+              label: 'Deactivated',
+              dot: 'bg-state-error',
+              activeClass: 'border-state-error bg-state-error/15 text-state-error font-bold shadow-xs',
+              defaultClass: 'border-transparent text-ink-muted hover:text-ink hover:bg-paper-raised',
+            },
+          ].map((item) => {
+            const isCurrent =
+              store.status === item.value ||
+              (item.value === 'PENDING' && store.status === 'PENDING_REVIEW') ||
+              (item.value === 'DEACTIVATED' && (store.status === 'PAUSED' || store.status === 'CLOSED'));
+            return (
+              <button
+                key={item.value}
+                type="button"
+                disabled={isActivatingStore}
+                onClick={() => handleChangeStoreStatus(item.value)}
+                className={`flex items-center gap-1.5 rounded-lg border px-3.5 py-1.5 text-xs transition-all ${
+                  isCurrent ? item.activeClass : item.defaultClass
+                }`}
+              >
+                <span className={`h-2 w-2 rounded-full ${item.dot}`} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -476,7 +605,7 @@ export default function StoreDetailConsole({
           <div className="flex items-center gap-3 rounded-xl border border-state-run/40 bg-state-run/10 p-4 text-sm text-ink">
             <ShieldAlert className="h-5 w-5 text-state-run flex-shrink-0" />
             <p>
-              This store is currently <span className="font-bold">{store.status || 'inactive'}</span>. Device activation is only permitted when the store is activated. Click <span className="font-bold">&quot;Activate Store&quot;</span> above to enable device activation.
+              This store is currently <span className="font-bold">{store.status === 'PENDING' || store.status === 'PENDING_REVIEW' ? 'Pending' : 'Deactivated'}</span>. Device activation is only permitted when the store is activated. Click <span className="font-bold">&quot;Activate Store&quot;</span> above to enable device activation.
             </p>
           </div>
         )}
@@ -530,8 +659,9 @@ export default function StoreDetailConsole({
             {/* Credentials Display */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="rounded-xl border border-line bg-paper-raised/50 p-4 space-y-1">
-                <span className="text-xs font-bold uppercase tracking-wider text-ink-muted">
-                  Auto-Incremented Device ID
+                <span className="text-xs font-bold uppercase tracking-wider text-ink-muted flex items-center gap-1.5">
+                  <Lock className="h-3.5 w-3.5 text-state-run" />
+                  Auto-Incremented Device ID (Read-only)
                 </span>
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-2xl font-extrabold text-ink">
@@ -553,6 +683,9 @@ export default function StoreDetailConsole({
                     )}
                   </button>
                 </div>
+                <p className="text-[11px] text-ink-muted">
+                  Auto-generated from database sequence. Locked and non-editable.
+                </p>
               </div>
 
               <div className="rounded-xl border border-state-run/40 bg-state-run/5 p-4 space-y-1">
@@ -579,21 +712,47 @@ export default function StoreDetailConsole({
                     )}
                   </button>
                 </div>
+                <p className="text-[11px] text-ink-muted">
+                  Expires in 15 minutes. Send to /admin/store/activate to provision player.
+                </p>
               </div>
             </div>
 
-            {/* Raspberry Pi curl command instruction */}
-            <div className="rounded-xl border border-line bg-paper p-4 space-y-2.5">
-              <div className="flex items-center justify-between">
+            {/* Raspberry Pi curl command instruction & Test Trigger */}
+            <div className="rounded-xl border border-line bg-paper p-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-ink">
                   <Terminal className="h-4 w-4 text-ink-muted" />
                   <h4 className="text-xs font-bold uppercase tracking-wider">
                     Raspberry Pi Hardware Activation Command
                   </h4>
                 </div>
-                <span className="text-xs text-state-ok font-semibold">
-                  Returns: &#123; deviceID, status, shortlived, longlived &#125;
-                </span>
+                <div className="flex items-center gap-2">
+                  <Link
+                    href="/admin/store/activate"
+                    className="text-xs font-semibold text-ink hover:underline"
+                  >
+                    Open /admin/store/activate &rarr;
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={handleSimulateActivation}
+                    disabled={isSimulatingActivation}
+                    className="inline-flex items-center gap-1.5 rounded-pill bg-ink px-3 py-1 text-xs font-semibold text-paper-raised hover:bg-ink/85 disabled:opacity-50 transition-colors shadow-sm"
+                  >
+                    {isSimulatingActivation ? (
+                      <>
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                        Activating...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-3 w-3" />
+                        Simulate Activation
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <pre className="overflow-x-auto rounded-lg bg-ink p-4 font-mono text-xs text-paper-raised leading-relaxed">
@@ -611,6 +770,116 @@ export default function StoreDetailConsole({
             </div>
           </div>
         )}
+      </div>
+
+      {/* Store Geographic Location & OpenFreeMap Bengaluru */}
+      <div className="card p-7 border-line bg-paper-raised/40 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-line">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-bold text-ink">Store Location & OpenFreeMap</h2>
+              <span className="rounded-full bg-ink/10 px-2.5 py-0.5 text-xs font-bold text-ink">
+                Bengaluru Centered
+              </span>
+            </div>
+            <p className="text-sm text-ink-muted mt-1">
+              Interactive OpenFreeMap vector map for {store.name}. Convert address to Longitude and Latitude coordinates, or click the map to place the venue pin.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSaveLocationCoordinates}
+            disabled={isSavingLocation}
+            className="inline-flex min-h-[42px] items-center gap-2 rounded-pill bg-ink px-6 text-sm font-semibold text-paper-raised hover:bg-ink/85 disabled:opacity-50 transition-all shadow-sm"
+          >
+            {isSavingLocation ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            <span>{isSavingLocation ? 'Saving Coordinates…' : 'Save Coordinates'}</span>
+          </button>
+        </div>
+
+        {locationSavedNotice && (
+          <div className="flex items-center gap-2 rounded-md border border-state-ok/30 bg-state-ok/10 px-4 py-3 text-sm text-state-ok">
+            <Check className="h-4 w-4 shrink-0" />
+            <span>{locationSavedNotice}</span>
+          </div>
+        )}
+
+        <StoreLocationPicker
+          locationValue={locationDraft}
+          latitudeValue={latitudeDraft}
+          longitudeValue={longitudeDraft}
+          onChangeLocation={setLocationDraft}
+          onChangeCoordinates={(lat, lng) => {
+            setLatitudeDraft(lat);
+            setLongitudeDraft(lng);
+          }}
+        />
+      </div>
+
+      {/* Store Custom Creatives Section */}
+      <div className="card p-7 border-line bg-paper-raised/40 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-line">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-bold text-ink">Store Creatives</h2>
+              <span className="rounded-full bg-accent-wash px-2.5 py-0.5 text-xs font-bold text-accent">
+                Venue Media
+              </span>
+            </div>
+            <p className="text-sm text-ink-muted mt-1">
+              Ingest custom venue creatives (PNG, JPEG, JPG, MP4, or MKV) for {store.name} screens using direct presigned S3 upload.
+            </p>
+          </div>
+        </div>
+
+        <StoreCreativeInput
+          storeId={store.id}
+          storeName={store.name}
+          initialCreativeUrl={store.creativeUrl || store.videoUrl}
+          initialCreativeType={store.creativeType}
+          initialCreativeKey={store.creativeKey || store.videoKey}
+          onCreativeUpdated={(creative) => {
+            setStore((prev) => ({
+              ...prev,
+              creativeUrl: creative.url,
+              creativeKey: creative.key,
+              creativeType: creative.mimeType,
+              creativeBucket: creative.bucket,
+              ...(creative.mimeType.startsWith('video/') || creative.key.endsWith('.mp4') || creative.key.endsWith('.mkv')
+                ? {
+                    videoUrl: creative.url,
+                    videoKey: creative.key,
+                    videoBucket: creative.bucket,
+                  }
+                : {}),
+            }));
+            setNotification({
+              message: 'Store creative ingested and updated successfully!',
+              type: 'success',
+            });
+          }}
+          onCreativeDeleted={() => {
+            setStore((prev) => ({
+              ...prev,
+              creativeUrl: null,
+              creativeKey: null,
+              creativeType: null,
+              creativeBucket: null,
+              videoUrl: null,
+              videoKey: null,
+              videoBucket: null,
+            }));
+            setNotification({
+              message: 'Store creative removed successfully.',
+              type: 'info',
+            });
+          }}
+        />
       </div>
 
       {/* Registered Devices List */}
