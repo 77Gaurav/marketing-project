@@ -59,7 +59,20 @@ async function main() {
     ssl: process.env.DATABASE_SSL === 'require' ? { rejectUnauthorized: false } : undefined,
   });
 
-  await client.connect();
+  let connected = false;
+  for (let attempt = 1; attempt <= 10; attempt++) {
+    try {
+      await client.connect();
+      connected = true;
+      break;
+    } catch (err) {
+      if (attempt === 10) {
+        fail(`Could not connect to database after 10 attempts: ${err.message}`);
+      }
+      process.stdout.write(`  Waiting for PostgreSQL connection (attempt ${attempt}/10)...\n`);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+  }
 
   try {
     await acquireLock(client);

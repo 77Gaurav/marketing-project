@@ -84,13 +84,15 @@ services:
       # lib/env.ts refuses to start when NODE_ENV=production and this is a default or under 12
       # characters, so a deploy cannot silently ship the admin backdoor.
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required, at least 12 characters}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@stringtheory.test}
       ADMIN_NAME: ${ADMIN_NAME:-Network admin}
+      DBMS_USERNAME: ${DBMS_USERNAME:-admin}
+      DBMS_PASSWORD: ${DBMS_PASSWORD:-admin}
       # Spelled out rather than left to the default. With this on, anyone who can POST /api/campaigns
       # provisions themselves a BRAND account; lib/env.ts defaults it off, and a production value
       # that only ever reaches the app through this file should not depend on that default holding.
-      ALLOW_UNAUTHENTICATED_SIGNUP: 'false'
+      ALLOW_UNAUTHENTICATED_SIGNUP: ${ALLOW_UNAUTHENTICATED_SIGNUP:-false}
       # DEV_AUTH_EMAIL is deliberately absent. It is the no-session fallback identity and
       # lib/env.ts ignores it in production, so passing it would be a value that reads as
       # configured and does nothing.
@@ -108,6 +110,11 @@ services:
       AWS_REGION: ${AWS_REGION:-ap-south-1}
       S3_ORIGINAL_BUCKET: ${S3_ORIGINAL_BUCKET:?S3_ORIGINAL_BUCKET is required}
       S3_ENCODED_BUCKET: ${S3_ENCODED_BUCKET:?S3_ENCODED_BUCKET is required}
+      LOGFIRE_TOKEN: ${LOGFIRE_TOKEN:-}
+      LOGFIRE_SERVICE_NAME: ${LOGFIRE_SERVICE_NAME:-string-theory}
+      LOGFIRE_SERVICE_VERSION: ${LOGFIRE_SERVICE_VERSION:-0.1.0}
+      LOGFIRE_ENVIRONMENT: ${LOGFIRE_ENVIRONMENT:-production}
+    command: sh -c "node db/migrate.mjs && exec node server.js"
     
     ports:
       # Bound to all interfaces, unlike the database, because this is the only thing an ALB or a

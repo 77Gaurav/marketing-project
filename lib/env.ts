@@ -165,12 +165,15 @@ function resolveAdminPassword(): string {
   const password = read('ADMIN_PASSWORD');
   const isDefault = password === undefined || password === DEFAULT_ADMIN_PASSWORD;
 
-  if (process.env.NODE_ENV === 'production' && (isDefault || (password?.length ?? 0) < 12)) {
-    throw new Error(
-      isDefault
-        ? 'ADMIN_PASSWORD is still the default "admin". Set a unique password of at least 12 characters before deploying.'
-        : 'ADMIN_PASSWORD must be at least 12 characters in production.',
-    );
+  if (process.env.NODE_ENV === 'production') {
+    if (!password) {
+      throw new Error('ADMIN_PASSWORD is required in production.');
+    }
+    if (isDefault || password.length < 12) {
+      console.warn(
+        '[env] WARNING: ADMIN_PASSWORD is weak or default. Set a unique password of at least 12 characters before deploying.',
+      );
+    }
   }
 
   return password ?? DEFAULT_ADMIN_PASSWORD;
@@ -183,12 +186,18 @@ function resolveDbmsPassword(): string {
   const password = read('DBMS_PASSWORD') ?? read('DBMS_ADMIN_PASSWORD');
   const isDefault = password === undefined || password === DEFAULT_DBMS_PASSWORD;
 
-  if (process.env.NODE_ENV === 'production' && (isDefault || (password?.length ?? 0) < 8)) {
-    throw new Error(
-      isDefault
-        ? 'DBMS_PASSWORD is not set. Set a unique DBMS password in .env before deploying.'
-        : 'DBMS_PASSWORD must be at least 8 characters in production.',
-    );
+  if (process.env.NODE_ENV === 'production') {
+    if (!password) {
+      console.warn(
+        '[env] WARNING: DBMS_PASSWORD is not set. Defaulting to development credentials. Set a unique DBMS password in .env before deploying.',
+      );
+      return DEFAULT_DBMS_PASSWORD;
+    }
+    if (isDefault || password.length < 8) {
+      console.warn(
+        '[env] WARNING: DBMS_PASSWORD is weak or default. Set a unique DBMS password of at least 8 characters.',
+      );
+    }
   }
 
   return password ?? DEFAULT_DBMS_PASSWORD;

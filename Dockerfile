@@ -76,6 +76,6 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-# Server.js handles SIGTERM itself and closes in-flight requests. `--init` (compose) or
-# `--init` (docker run) makes this PID 1's reaper forward signals rather than orphaning them.
-CMD ["node", "server.js"]
+# Automatically apply schema migrations on container start, then run server.js.
+# `exec` replaces the shell process so PID 1 signal forwarding (tini) reaches server.js directly.
+CMD ["sh", "-c", "node db/migrate.mjs && exec node server.js"]
